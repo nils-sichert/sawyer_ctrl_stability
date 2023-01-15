@@ -406,17 +406,7 @@ class GCController(object):
                 inertia_torques[i] += B_kdl[i, j] * u[j]	# B * u
 
         # assign to torques commands
-        i = 0
-        for joint in self._limb.joint_names():
-            cmd[joint] = inertia_torques[i] + coriolis_torques[i] + grav_torques[i]# + interaction_torques[i]
-
-            # check limits
-            if cmd[joint] > _torque_limits[i]:
-                print ("Upper limit reached")
-            elif cmd[joint] < -_torque_limits[i]:
-                print ("Lower limit reached")
-            self._gc_torques_msg.effort[i] = cmd[joint]	# assign them to robot
-            i += 1
+        
         
         # publish the computed gc torques
         self._pub_gc_torques.publish(self._gc_torques_msg)

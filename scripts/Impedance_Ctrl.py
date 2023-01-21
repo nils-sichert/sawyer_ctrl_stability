@@ -309,7 +309,7 @@ class GCController(object):
         interaction_torques = [0]* self._nrOfJoints
 
         ee_wrench = self._get_current_ee_wrench()
-        
+        print(len(j_kdl))
         j_kdl_transpose = [[0 for _ in range(6)] for _ in range(7)]
         for i in range(0, 6):
             for j in range (0, self._nrOfJoints):

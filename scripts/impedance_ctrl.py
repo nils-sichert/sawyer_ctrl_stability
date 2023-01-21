@@ -13,9 +13,6 @@ class impedance_ctrl:
         # load kinematics and dynamics models
         self.grav_vector = KDL.Vector(0, 0, -9.81)
         self.dyn_kdl = KDL.ChainDynParam(robot_chain, self.grav_vector)
-        self.joint_angles = KDL.JntArray(nrOfJoints)
-        self.joint_velocities = KDL.JntArray(nrOfJoints)
-        self.joint_efforts = KDL.JntArray(nrOfJoints)
         self.grav_torques = KDL.JntArray(nrOfJoints)
         self.coriolis_torques = KDL.JntArray(nrOfJoints)
         self.B_kdl = KDL.JntSpaceInertiaMatrix(nrOfJoints)
@@ -25,11 +22,9 @@ class impedance_ctrl:
 
     def run(self, joint_angles, joint_velocities, joint_efforts, rate, jac_kdl, jacdot_kdl, current_ee_wrench, current_ee_pose, joint_torques):
         # Define impedance controller parameters
-        # TODO fix misstakes and write pseudo code algorithm
         M = np.identity(3) # mass matrix in the mass-spring-damper system TODO update while running
         D = 20 * np.identity(3)
         K = 10 * np.identity(3)
-        
         self._dataconversion()
         trq_grav, trq_coriolis, trq_intertia= self._compute_torques(joint_angles, joint_velocities)
         jdot_qdot = self._compute_jacobians(joint_angles, joint_velocities, rate, jac_kdl, jacdot_kdl)
@@ -66,7 +61,6 @@ class impedance_ctrl:
         x_tilde = self._calculate_error(self.xd, current_ee_pose)
         x_tilde_dot = self._calculate_error(xd_dot, x_dot)
         
-        # TODO understand and correct
         M_jdot_qdot = [0] * 3
         for i in range(0, 3):
             for j in range (0, 3):
@@ -95,7 +89,9 @@ class impedance_ctrl:
         # compute torques
         trq_grav = self.dyn_kdl.JntToGravity(joint_angles, self.grav_torques)	# g(q)
         trq_coriolis = self.dyn_kdl.JntToCoriolis(joint_angles, joint_velocities, self.coriolis_torques)	# C(q, q_dot) * q_dot
+        print("Coriolis:" + trq_coriolis)
         trq_intertia = self.dyn_kdl.JntToMass(joint_angles, self.B_kdl)
+        print("Mass:" + trq_intertia)
         return trq_grav, trq_coriolis, trq_intertia
 
     def _compute_jacobians(self, joint_angles, joint_velocities, rate, jac_kdl, jacdot_kdl):

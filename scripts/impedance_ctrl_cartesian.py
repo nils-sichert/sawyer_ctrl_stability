@@ -1,24 +1,30 @@
 import numpy as np
 import math 
 import PyKDL as kdl
+import time
 
 class imedance_ctrl:
-    def __init__(self):
-        self._J  = self._set_J()
-        self._J_1 = self._set_J()
-        self._A = self._set_A()
-        self._A_1 = self._set_A()
-        self._Kd = self._set_Kd()
-        self._Dd = self._set_Dd()
-        self._Kn = self._set_Kn()
-        self._Dn = self._set_Dn()
-        self._qn = self._set_qn()
+    def __init__(self, robot_chain):
+        self._J  = self._set_J() # 6x7
+        self._J_1 = self._set_J() # 6x7
+        self._A = self._set_A() # 6x6
+        self._A_1 = self._set_A() # 6x6
+        self._Kd = self._set_Kd() # 6x6
+        self._Dd = self._set_Dd() # 6x6
+        self._Kn = self._set_Kn() # 6x6
+        self._Dn = self._set_Dn() # 6x6
+        self._qn = self._set_qn() # 7x1
 
-        self._err = np.zeros(6)
-        self._err_1 = np.zeros(6)
-        self._derr = np.zeros(6)
+        self._err = np.zeros(6) # 6x1
+        self._err_1 = np.zeros(6) # 6x1
+        self._derr = np.zeros(6) # 6x1
 
-    def run_impedance_controll(self, q, dq, pose, pose_desi, sampling_Time, Dd=None, Kd=None,): #TODO change default values
+        self.grav_vector = kdl.Vector(0, 0, -9.81)
+        self.dyn_kdl = kdl.ChainDynParam(robot_chain, self.grav_vector)
+        self.jac_kdl = kdl.ChainJntToJacSolver(robot_chain)
+        
+
+    def run_impedance_controll(self, q, dq, pose, pose_desi, sampling_Time, robot_chain, Dd=np.identity(6), Kd=np.identity(6)):
         self._update_Dd(Dd)
         self._update_Kd(Kd)
         self._update_J(q)
@@ -53,70 +59,69 @@ class imedance_ctrl:
         self._J_1 = self._J
         self._err_1 = self._err
 
+
+
     def _calc_dJacobain(self, dt):
         dJ = (1/dt)*(self._get_J()-self._get_J_1())
-        return dJ
+        return dJ # return 6x7
     def _calc_A(self, M):
-        self._A = np.matmul(np.matmul(np.transpose(self._get_J()),np.linalg.inv(M)),self._get_J())
-        return
+        self._A = np.matmul(np.matmul(self._get_J(),np.linalg.inv(M)),np.transpose(self._get_J()))
+        return # return 6x6
     def _calc_dA(self, dt):
         dA = (1/dt)*(self._get_A()-self._get_A_1())
-        return dA
+        return dA # return 6x6
     def _calc_C_hat(self, dA):
         C_hat = 0.5*dA
-        return C_hat
+        return C_hat # return 7x7
     def _calc_N(self, q, M):
-        N = np.identity(len(q))-np.transpose(self._J)*self._A*self._J*np.linalg.inv(M)
-        return N
+        N = np.identity(len(q))-np.matmul(np.matmul(np.matmul(np.transpose(self._J),self._A),self._J),np.linalg.inv(M))
+        return N # return 7x7
     def _calc_err(self, pose, pose_desi):
-        a = self._calc_err_scalar(pose, pose_desi)
-        b = self._calc_err_quat(pose, pose_desi)
-        tmp = [] #TODO implement more elegant solution
-        for i in range(len(a)):
-            tmp.append(a[i])
-        for j in range(len(b)):
-            tmp.append(b[j])
-        return tmp
+        a = self._calc_err_scalar(pose[:3], pose_desi[:3])
+        b = self._calc_err_quat(pose[3:], pose_desi[3:])
+        tmp = np.concatenate((a,b))
+        return tmp # return 6x1
     def _calc_err_scalar(self, pose, pose_desi):
         err_tmp=[]
-        for i in range(3):
+        for i in range(len(pose)):
             err_tmp.append(pose[i]-pose_desi[i])
-        self._err = err_tmp
-        return
+        err = np.array(err_tmp)
+        return err
     def _calc_derr(self,dt):
         derr = (1/dt)*(self._get_err()-self._get_err_1())
-        return derr
+        return derr # return 6x1
     def _calc_err_quat(self, pose, pose_desi):
         err_tmp=[]
-        for i in range(3):
+        for i in range(len(pose)):
             #TODO add quaterionen error calculation
-            err_tmp = 0
-        return err_tmp
+            err_tmp.append(pose[i]-pose_desi[i])
+        err = np.array(err_tmp)
+        return err #return 3x1
     def _calc_nullspace(self, q, dq, N):
-        tau_nullspace = N*(-self._get_Kn*self._calc_err(q, self._get_qn)-self._get_Dn*dq)
-        return tau_nullspace
+        tau_nullspace = np.matmul(N,(np.matmul(-self._Kn,self._calc_err_scalar(q, self._qn))-np.matmul(self._Dn,dq)))
+        return tau_nullspace # return 6x1
     def _calc_ddx(self):
-        pass # TODO Implement x/ddt reread in Paper
+        ddx = np.ones((6,1))
+        return ddx# TODO Implement x/ddt reread in Paper # return 6x1
+        
     def calc_torque(self, C_hat, dJ, C, tau_nullspace, g, ddx, err, dErr, dq):
-        tau_motor = np.transpose(self._J)*(self._A*ddx-(self._Kd*err+self._Dd* dErr)-C_hat*dErr-self._A*dJ*dq)+C+tau_nullspace+g
-    def convert_KDL2Numpy(self, kdl):
-        num_colum = 0
-        num_rows = 0 #TODO unabhängig machen Breite und Länge der Matrix KDL ermitteln erstellen (0 ersetzten)
-        numpy = np.zeros(num_rows, num_colum)
-        for i in range(num_rows):
-            for j in range (num_colum): #TODO evtl. umdrehen, Überprüfen!
+        tau_motor = np.transpose(self._J)@(self._A@ddx-(self._Kd@err+self._Dd@dErr)-C_hat@dErr-self._A@dJ@dq)+C@dq+tau_nullspace+g
+        return tau_motor # return 7x1
+    def convert_KDL2Numpy(self, kdl, nrRows, nrColums):
+        numpy = np.zeros(nrRows, nrColums)
+        for i in range(nrRows):
+            for j in range (nrColums): #TODO evtl. umdrehen, Überprüfen!
                 numpy[i][j] = kdl[i, j]
-        return numpy
+        return np.array(numpy)
     
     """
     Setting-methods to set variables
     """
-    #TODO implement settings
     def _set_J(self):
-        J = np.ones((7,6)) #TODO implement right dimension and control them
+        J = np.ones((6,7)) # Dimension is 6x7 matrix
         return J
     def _set_A(self):
-        A = np.ones((7,6)) #TODO implement right dimension and control them
+        A = np.ones((6,6)) # Dimension is 7x7
         return A
     def _set_Kd(self):
         Kd = np.identity(6)
@@ -125,10 +130,10 @@ class imedance_ctrl:
         Dd = np.identity(6)
         return Dd
     def _set_Kn(self):
-        Kn = np.identity(6)
+        Kn = np.identity(7)
         return Kn
     def _set_Dn(self):
-        Dn = np.identity(6)
+        Dn = np.identity(7)
         return Dn
     def _set_qn(self):
         qn = np.zeros(7)
@@ -165,27 +170,31 @@ class imedance_ctrl:
     """
 
     def _update_J(self, q):
-        # TODO Import Library
-        self._J = np.ones((7,6))
+        j_kdl = kdl.Jacobian(len(q))
+        J = self.jac_kdl.JntToJac(q, j_kdl)
+        self._J = self.convert_KDL2Numpy(J,6,7)
         return
     def _update_M(self, q):
-        # TODO Import Library
-        M = 0
+        M_kdl = kdl.JntSpaceInertiaMatrix(len(q))
+        trq_intertia = self.dyn_kdl.JntToMass(q, M_kdl)
+        M = self.convert_KDL2Numpy(trq_intertia,7,7)
         return M
     def _update_C(self, q, dq):
-        # TODO Import Library
-        C = 0
+        coriolis_torques = kdl.JntArray(len(q))
+        trq_coriolis = self.dyn_kdl.JntToCoriolis(q, dq, coriolis_torques)	# C(q, q_dot) * q_dot
+        C = self.convert_KDL2Numpy(trq_coriolis,7,7)
         return C   
     def _update_g(self, q):
-        # TODO Import Library
-        g = 0
+        grav_torques = kdl.JntArray(len(q))
+        trq_grav = self.dyn_kdl.JntToGravity(q, grav_torques)
+        g = self.convert_KDL2Numpy(trq_grav,7,1)
         return g
     def _update_Kd(self, Kd):
-        if Kd is not None:
+        if Kd is not self._Kd:
             self._Kd = Kd
         return
     def _update_Dd(self, Dd):
-        if Dd is not None:
+        if Dd is not self._Dd:
             self._Dd = Dd
         return
     def _update_Kn(self):
@@ -202,13 +211,15 @@ class imedance_ctrl:
         return
 
 def main():
-    q = np.array([1,1,1,1,1,1,1])
-    dq = np.array([1,1,1,1,1,1,1])
-    pose = np.array([1,1,1,0.5,0.5,0.5])
-    pose_desi = np.array([1.1,1.1,1.1,0.4,0.4,0.4])
+    q = np.ones((7,1))
+    dq = np.ones((7,1))
+    pose = np.array([1,2,3,4,5,6])#np.ones((6,1))
+    pose_desi = np.ones((6,1))*0.5
     sampling_Time = 0.01
     controller = imedance_ctrl()
-    controller.run_impedance_controll(q, dq, pose, pose_desi, sampling_Time)
+    start = time.time()
+    controller.run_impedance_controll(q, dq, pose, pose_desi, sampling_Time) #looptime with fixed input = 0.0006s
+    end = time.time()
 
 
 if __name__ == '__main__':

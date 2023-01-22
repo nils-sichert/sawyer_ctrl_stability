@@ -14,6 +14,9 @@ class imedance_ctrl:
         self._Kn = self._set_Kn() # 6x6
         self._Dn = self._set_Dn() # 6x6
         self._qn = self._set_qn() # 7x1
+        self.pose_1 = self._set_dpose() # 6x1
+        self.dpose_1 = self._set_dpose() # 6x1
+
 
         self._err = np.zeros(6) # 6x1
         self._err_1 = np.zeros(6) # 6x1
@@ -22,9 +25,10 @@ class imedance_ctrl:
         self.grav_vector = kdl.Vector(0, 0, -9.81)
         self.dyn_kdl = kdl.ChainDynParam(robot_chain, self.grav_vector)
         self.jac_kdl = kdl.ChainJntToJacSolver(robot_chain)
+        self._robotic_chain = robot_chain
         
 
-    def run_impedance_controll(self, q, dq, pose, pose_desi, sampling_Time, robot_chain, Dd=np.identity(6), Kd=np.identity(6)):
+    def run_impedance_controll(self, q, dq, pose, pose_desi, sampling_Time, Dd=np.identity(6), Kd=np.identity(6)):
         self._update_Dd(Dd)
         self._update_Kd(Kd)
         self._update_J(q)
@@ -49,7 +53,7 @@ class imedance_ctrl:
         # Calculate Position and Orientation Error und the first derivation of the Error
         err = self._calc_err(pose, pose_desi)
         dErr = self._calc_derr(sampling_Time)
-        ddx = self._calc_ddx()
+        ddx = self._calc_ddx(pose)
 
         # Calculate Output torque for robot motors
         self.calc_torque(C_hat, dJ, C, tau_nullspace, g, ddx, err, dErr, dq)
@@ -58,6 +62,8 @@ class imedance_ctrl:
         self._A_1 = self._A
         self._J_1 = self._J
         self._err_1 = self._err
+        self._dpose_1 = self.dpose
+        self.pose_1 = pose
 
 
 
@@ -90,20 +96,23 @@ class imedance_ctrl:
     def _calc_derr(self,dt):
         derr = (1/dt)*(self._get_err()-self._get_err_1())
         return derr # return 6x1
+    
     def _calc_err_quat(self, pose, pose_desi):
+        # TODO Quaterionen Error Implementieren
         err_tmp=[]
         for i in range(len(pose)):
-            #TODO add quaterionen error calculation
-            err_tmp.append(pose[i]-pose_desi[i])
+            err_tmp.append(0)
         err = np.array(err_tmp)
         return err #return 3x1
+    
     def _calc_nullspace(self, q, dq, N):
         tau_nullspace = np.matmul(N,(np.matmul(-self._Kn,self._calc_err_scalar(q, self._qn))-np.matmul(self._Dn,dq)))
         return tau_nullspace # return 6x1
-    def _calc_ddx(self):
-        ddx = np.ones((6,1))
-        return ddx# TODO Implement x/ddt reread in Paper # return 6x1
-        
+    def _calc_ddx(self, pose, dt):
+        self.dpose = (1/dt)*(self.pose_1()-pose()) # dx #TODO implement either direct kinematic -> ddx or velocity to acceleration, is there a measured acceleration in Gazebo
+        ddx = (1/dt)*(self.dpose_1()-self.dpose()) # ddx
+        return ddx # return 6x1
+
     def calc_torque(self, C_hat, dJ, C, tau_nullspace, g, ddx, err, dErr, dq):
         tau_motor = np.transpose(self._J)@(self._A@ddx-(self._Kd@err+self._Dd@dErr)-C_hat@dErr-self._A@dJ@dq)+C@dq+tau_nullspace+g
         return tau_motor # return 7x1
@@ -138,7 +147,9 @@ class imedance_ctrl:
     def _set_qn(self):
         qn = np.zeros(7)
         return qn
-
+    def _set_dpose(self):
+        dpose = np.zeros(6)
+        return dpose
     """
     Getter-methods to get Variables
     """
@@ -204,13 +215,14 @@ class imedance_ctrl:
         self._Dn = self._Dn
         return
     def _update_qn(self):
-
+    
         # Predefined value -> no free movement
         self._qn = self._qn
         # Freely movement qn = q_1
         return
 
 def main():
+
     q = np.ones((7,1))
     dq = np.ones((7,1))
     pose = np.array([1,2,3,4,5,6])#np.ones((6,1))

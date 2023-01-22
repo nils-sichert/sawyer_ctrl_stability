@@ -222,11 +222,11 @@ class GCController(object):
             print ("-- Reset to neutral ON.")
             self.move_to_neutral()
 
-        (ok, robot) = urdf.treeFromFile('sawyer_robot/sawyer_description/urdf/sawyer.urdf.xacro')
+        (ok, robot) = urdf.treeFromFile('sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro')
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()
         self._jac_kdl = KDL.ChainJntToJacSolver(self._robot_chain)
-        self._jacdot_kdl = KDL.ChainJntToJacDotSolver(self._robot_chain)
+        #self._jacdot_kdl = KDL.ChainJntToJacDotSolver(self._robot_chain)
 
         self.init_ee_pose = self._get_current_ee_pose()
         self.prev_x_dot = [0] * 3
@@ -299,7 +299,7 @@ class GCController(object):
             q_dqdt[i] +=  self._rate * joint_velocities[i]
 
         self._jac_kdl.JntToJac(joint_angles, j_kdl)	# Jacobian
-        self._jacdot_kdl.JntToJacDot(KDL.JntArrayVel(q_dqdt, joint_velocities), jdot_kdl)	# J_dot
+        #self._jacdot_kdl.JntToJacDot(KDL.JntArrayVel(q_dqdt, joint_velocities), jdot_kdl)	# J_dot
         
         # taken from KDL example
         jdot_qdot = KDL.Twist()
@@ -309,7 +309,7 @@ class GCController(object):
         interaction_torques = [0]* self._nrOfJoints
 
         ee_wrench = self._get_current_ee_wrench()
-        print(len(j_kdl))
+        #print(len(j_kdl))
         j_kdl_transpose = [[0 for _ in range(6)] for _ in range(7)]
         for i in range(0, 6):
             for j in range (0, self._nrOfJoints):
@@ -350,8 +350,8 @@ class GCController(object):
 
         # Define impedance controller parameters
         M = np.identity(3) # mass matrix in the mass-spring-damper system
-        Kd = 20 * np.identity(3)
-        Kp = 10 * np.identity(3)
+        Kd = np.identity(3)
+        Kp = np.identity(3)
 
         # Define desired end effector pose
         self.xd = [self.init_ee_pose.position.x + 0.5, self.init_ee_pose.position.y, self.init_ee_pose.position.z]	# xd
@@ -523,17 +523,7 @@ class GCController(object):
         pose[5] = _ee_pose[0].orientation.z
         pose[6] = _ee_pose[0].orientation.w
         
-        self._write_data(open('/home/nourhan/ros_ws/src/sawyer_test/src/imFa.csv', "a"), wrench)
-        self._write_data(open('/home/nourhan/ros_ws/src/sawyer_test/src/imEEpose.csv', "a"), pose)
-        self._write_data(open('/home/nourhan/ros_ws/src/sawyer_test/src/imJointAngles.csv', "a"), _joint_pos)
-        self._write_data(open('/home/nourhan/ros_ws/src/sawyer_test/src/imJointVelocities.csv', "a"), _joint_vel)
-        self._write_data(open('/home/nourhan/ros_ws/src/sawyer_test/src/imJointTorques.csv', "a"), _joint_torque)
-        
-    def _write_data(self, fileobj, data):
-        for datum in data:
-            fileobj.write("%f, " % datum)
-        fileobj.write("\n")
-        fileobj.close()
+       
                     
     def clean_shutdown(self):
         """

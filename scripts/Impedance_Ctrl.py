@@ -293,18 +293,11 @@ class GCController(object):
         dyn_kdl.JntToCoriolis(joint_angles, joint_velocities, coriolis_torques)	# C(q, q_dot) * q_dot
         dyn_kdl.JntToMass(joint_angles, B_kdl)
 
-        #compute Jacobian and Jacobian dot
-        q_dqdt = KDL.JntArray(joint_angles)
-        for i in range(joint_angles.rows()):
-            q_dqdt[i] +=  self._rate * joint_velocities[i]
-
         self._jac_kdl.JntToJac(joint_angles, j_kdl)	# Jacobian
-        #self._jacdot_kdl.JntToJacDot(KDL.JntArrayVel(q_dqdt, joint_velocities), jdot_kdl)	# J_dot
         
         # taken from KDL example
         jdot_qdot = KDL.Twist()
-        KDL.MultiplyJacobian(jdot_kdl, joint_velocities, jdot_qdot)	# J_dot * q_dot
-
+        
         inertia_torques = [0] * self._nrOfJoints
         interaction_torques = [0]* self._nrOfJoints
 

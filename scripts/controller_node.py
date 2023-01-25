@@ -20,14 +20,22 @@ class controller():
         self.impedance_ctrl = impedance_ctrl()
         # Instance Optimal Controller
         # Instance Robotic Chain
-        # Instance state varibles (joint_angle, joint_velocity, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2)
+        urdf_filepath = "sawyer_robot/sawyer_description/urdf/sawyer_base.gazebo.xacro"
+        model = pinocchio.buildModelFromUrdf(urdf_filepath)
+        print('model name: ' + model.name)
+        data = model.createData()
+        q = pinocchio.randomConfiguration(model)
+        print('q: %s' % q.T)
+
+        pose = pinocchio.forwardKinematics(model, data, q)
+        
         # Rosrate
         self.rate = rospy.Rate(100) # 100Hz
         # Kd, Dd = rosparam(default)
         rospy.init_node('Passiv_Activ_Controller', anonymous=True)
         ### publisher ### (tau_motor: , gravity_compensation_turn_off)
 
-        self.publisher_motor_torque = rospy.Publisher('computed_gc_torques_sender', JointState, queue_size=10)
+        self.motor_torque_pub = rospy.Publisher('computed_gc_torques_sender', JointState, queue_size=10)
         
         # create publisher to disable default gravity compensation
         gc_ns = 'robot/limb/' + limb + '/suppress_gravity_compensation'
@@ -45,9 +53,17 @@ class controller():
         # robot joint state subscriber
         rospy.Subscriber('robot/joint_states', JointState, self.callback_joint_state)
         
-        # robot sea state subscriber
-        rospy.Subscriber('robot/limb/' + limb + '/gravity_compensation_torques', SEAJointState, self.callback_default_gc)
+        # robot sea state subscriberrospy.Subscriber('robot/limb/' + limb + '/gravity_compensation_torques', SEAJointState, self.callback_default_gc)
     
+        # Instance state varibles (joint_angle, joint_velocity, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2)
+        self.neutral_pose_jnt = [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981]
+        self.pose_desi = self.calc_pose(self.neutral_pose_jnt)
+        self.pose_1 = self.pose_desi
+        self.current_angle = self.joint_angle
+        self.jacobian = self.calc_jacobian(self.current_angle)
+        self.jacobian_1 = self.calc_jacobian(self.current_angle)
+        self.jacobian_2 = self.calc_jacobian(self.current_angle)
+
     def callback_joint_state(self, data: JointState):
         with self.lock:
             if len(data.position) >= 7:
@@ -68,13 +84,18 @@ class controller():
         msg.effort = torques
         publisher.publish(msg)
 
-    def run_statemachine(self, statecondition, Kd, Dd, joint_angle, joint_velocity, rate, pose, pose_desi, coriolis, inetria, gravity, jacobian, force_ee):
+    def run_statemachine(self, statecondition, Kd, Dd, joint_angle, joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, force_ee, ddPose_cart):
+        if statecondition == 1:
         # State 1: Impedance Controller
             #   Input: Kd, Dd, pose, pose_desi, joint_angles, joint_velocity, rosrate, coriolis, inertia, gravity, jacoabian, jacobian_1, jacobian_2)
             #   Output: tau_motor
-        torque_motor = self.impedance_ctrl.run_impedance_controll(Kd, Dd, joint_angle, joint_velocity, rate, pose, pose_desi, coriolis, inetria, gravity, jacobian, force_ee) #TODO correct input
+            torque_motor = self.impedance_ctrl.run_impedance_controll(Kd, Dd, joint_angle, joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, ddPose_cart) #TODO correct input
+        
+        elif statecondition == 2:
         # State 2: optimal Controller
             #   TODO implement optimal Controller
+            pass
+        
         return torque_motor
 
     def calc_pose(self, joint_angle):
@@ -112,12 +133,18 @@ class controller():
         return self.rate
 
     def get_pose_desi(self):
-        # TODO implement get_pose_desi
-        pass
+        # TODO implement callback for pose
+        return self.pose_desi
 
     def get_force_ee(self):
         # TODO implement get_force_ee
         pass
+
+    def get_jacobian_1(self):
+        return self.jacobian_1
+
+    def get_jacobian_2(self):
+        return self.jacobian_2
 
     def get_statecondition(self):
         statecondition = 1
@@ -131,23 +158,31 @@ class controller():
         controller_node = True # TODO implement a switch condition to turn it on and off
         while not rospy.is_shutdown():
             if controller_node == True:
-                Kd = self.get_Kd()
-                Dd = self.get_Dd()
-                joint_angle = self.joint_angle
-                joint_velocity = self.joint_vel
-                rate = self.get_rate()
-                pose = self.calc_pose(joint_angle)
-                pose_desi = self.get_pose_desi()
-                coriolis = self.calc_coriolis()
-                inetria = self.calc_inertia()
-                gravity = self.calc_gravity()
-                jacobian = self.calc_jacobian()
-                force_ee = self.get_force_ee()
-                statecondition = self.get_statecondition(force_ee)
+                Kd = self.get_Kd() # numpy 6x6
+                Dd = self.get_Dd() # numpy 6x6
+                joint_angle = self.joint_angle # numpy 7x1
+                joint_velocity = self.joint_vel # numpy 7x1
+                rate = self.get_rate() # int
+                jacobian_1 = self.get_jacobian_1() # numpy 6x7
+                jacobian_2 = self.get_jacobian_2() # numpy 6x7
+                pose = self.calc_pose(joint_angle) # numpy 6x1
+                ddPose_cart = 0 # TODO add ddPose cartesian # numpy 6x1
+                pose_desi = self.get_pose_desi() # numpy 6x1
+                coriolis = self.calc_coriolis() # numpy 7x7
+                inertia = self.calc_inertia() # numpy 7x7
+                gravity = self.calc_gravity() # numpy 7x1
+                jacobian = self.calc_jacobian() # numpy 6x7
+                force_ee = self.get_force_ee() # numpy 7x1
+                statecondition = self.get_statecondition(force_ee) # int
 
-                torque_motor = self.run_statemachine(statecondition, Kd, Dd, joint_angle, joint_velocity, rate, pose, pose_desi, coriolis, inetria, gravity, jacobian, force_ee)
+                # return numpy 7x1 vector of torques 
+                torque_motor = self.run_statemachine(statecondition, Kd, Dd, joint_angle, joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, force_ee, ddPose_cart)
                 
-                self.publish_torques(torque_motor)
+                self.publish_torques(torque_motor, self.motor_torque_pub)
+
+                self.jacobian_1 = jacobian
+                self.jacobian_2 = jacobian_1
+                self.pose_1 = pose
             
             self.reset_gravity_compensation()
             self.rate.sleep()

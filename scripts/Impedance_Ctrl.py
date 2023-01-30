@@ -220,7 +220,21 @@ class GCController(object):
                 print ("-- Reset to neutral OFF.")
         else:
             print ("-- Reset to neutral ON.")
-            self.move_to_neutral()
+            self.move_to_neutral()def move_to_neutral(self):
+        """
+        Moves the limb to neutral location.
+        """
+        #self._limb.move_to_neutral()
+        sawyer_neutral_pose = [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981]
+        new_limb_pose = {}
+        i = 0
+        for joint in self._limb.joint_names():
+            new_limb_pose[joint] = sawyer_neutral_pose[i]
+            i += 1
+        self._limb.move_to_joint_positions(new_limb_pose)
+        rospy.sleep(self._waitingtime)
+        print (self._limb.joint_names())
+        print ("######## Ready for next action. ########")
 
         (ok, robot) = urdf.treeFromFile('sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro')
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
@@ -401,9 +415,10 @@ class GCController(object):
         # assign to torques commands
         
         
-        # publish the computed gc torques
+        self._limb = intera_interface.Limb(limb)# publish the computed gc torques
         self._pub_gc_torques.publish(self._gc_torques_msg)
 
+        
         if self._verbose:
             print ("GC torques: ")
             print (cmd)
@@ -544,7 +559,7 @@ def main():
 
 if __name__ == "__main__":
     main()
-
+#
 
 
 

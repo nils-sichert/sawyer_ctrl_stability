@@ -19,13 +19,13 @@ from intera_interface import CHECK_VERSION
 
 class controller():
     def __init__(self, limb = "right"):
-        rospy.init_node("activ_passiv_controller") 
+        rospy.init_node('Passiv_Activ_Controller', anonymous=True)
         self.Kd = rospy.get_param("Kd", [1,1,1,1,1,1])
         self.Dd = rospy.get_param("Dd", [1,1,1,1,1,1])
         self._init_joint_angles = rospy.get_param("Init_angle", [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981])
 
         # control parameters
-        self.rate = rospy.Rate(100) # Controlrate - 100Hz
+        self.rate = 100 # Controlrate - 100Hz
         self._missed_cmd = 20 # Missed cycles before triggering timeout
         
         # Instance Impedance controller
@@ -35,7 +35,7 @@ class controller():
         self._limb = intera_interface.Limb(limb)
         # Instance Optimal Controller
         # Instance Robotic Chain
-        urdf_filepath = "sawyer_robot/sawyer_description/urdf/sawyer_base.gazebo.xacro"
+        urdf_filepath = "src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro"
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()
@@ -44,8 +44,7 @@ class controller():
         self.FKSolver = kdl.ChainFkSolverPos_recursive(self._robot_chain)
         self.dyn_kdl = kdl.ChainDynParam(self._robot_chain, self.grav_vector)
         
-        # Kd, Dd = rosparam(default)
-        rospy.init_node('Passiv_Activ_Controller', anonymous=True)
+      
         ### publisher ### (tau_motor: , gravity_compensation_turn_off)
 
         self.motor_torque_pub = rospy.Publisher('computed_gc_torques_sender', JointState, queue_size=10)
@@ -87,8 +86,8 @@ class controller():
         self.pose_1 = self.pose_desi
         self.current_angle = self.joint_angle
         self.jacobian = self.calc_jacobian(self.current_angle)
-        self.jacobian_1 = self.calc_jacobian(self.current_angle)
-        self.jacobian_2 = self.calc_jacobian(self.current_angle)
+        self.jacobian_1, self.jacobian_2 = self.jacobian, self.jacobian
+        
 
     def move_to_neutral(self):
         #self._limb.move_to_neutral()
@@ -146,39 +145,102 @@ class controller():
         
         return torque_motor
 
-    def calc_pose(self, joint_angle):
-        Frame = kdl.eeFrame
-        self.FKSolver.JntToCart(joint_angle, Frame)
+    def calc_pose(self, q, link_number = 7):
+        endeffec_frame = kdl.Frame()
+        kinematics_status = self.FKSolver.JntToCart(self.joint_list_to_kdl(q),
+                                                   endeffec_frame,
+                                                   link_number)
+        if kinematics_status >= 0:
+            p = endeffec_frame.p
+
+            M = endeffec_frame.M
+            return np.array([p.x(), p.y(), p.z(),0,0,0])
+            # return np.mat([[M[0,0], M[0,1], M[0,2], p.x()], 
+                        #    [M[1,0], M[1,1], M[1,2], p.y()], 
+                        #    [M[2,0], M[2,1], M[2,2], p.z()],
+                        #    [     0,      0,      0,     1]])
+        else:
+            return None
+    ##
+    # Tests to see if the given joint angles are in the joint limits.
+    # @param List of joint angles.
+    # @return True if joint angles in joint limits.
+    def joints_in_limits(self, q):
+        lower_lim = self.joint_limits_lower
+        upper_lim = self.joint_limits_upper
+        return np.all([q >= lower_lim, q <= upper_lim], 0)
+
+    ##
+    # Tests to see if the given joint angles are in the joint safety limits.
+    # @param List of joint angles.
+    # @return True if joint angles in joint safety limits.
+    def joints_in_safe_limits(self, q):
+        lower_lim = self.joint_safety_lower
+        upper_lim = self.joint_safety_upper
+        return np.all([q >= lower_lim, q <= upper_lim], 0)
+
+    ##
+    # Clips joint angles to the safety limits.
+    # @param List of joint angles.
+    # @return np.array list of clipped joint angles.
+    def clip_joints_safe(self, q):
+        lower_lim = self.joint_safety_lower
+        upper_lim = self.joint_safety_upper
+        return np.clip(q, lower_lim, upper_lim)
+
+    def kdl_to_mat(self, m):
+        mat =  np.mat(np.zeros((m.rows(), m.columns())))
+        for i in range(m.rows()):
+            for j in range(m.columns()):
+                mat[i,j] = m[i,j]
+        return mat
+
+    def joint_kdl_to_list(self, q):
+        if q == None:
+            return None
+        return [q[i] for i in range(q.rows())]
+
+    def joint_list_to_kdl(self, q):
+        if q is None:
+            return None
+        if type(q) == np.matrix and q.shape[1] == 0:
+            q = q.T.tolist()[0]
+        q_kdl = kdl.JntArray(len(q))
+        for i, q_i in enumerate(q):
+            q_kdl[i] = q_i
+        return q_kdl
+
+    def dictionary2list(self, dic):  
+        list_tmp = []
+        for key, value in dic.items():
+            list_tmp.append(value)
+        return list_tmp
 
     def calc_coriolis(self, joint_angles, joint_velocities):
         coriolis_torques = kdl.JntArray(self._nrOfJoints)
-        self.dyn_kdl.JntToCoriolis(joint_angles, joint_velocities, coriolis_torques)	# C(q, q_dot)
+        self.dyn_kdl.JntToCoriolis(self.joint_list_to_kdl(joint_angles), self.joint_list_to_kdl(joint_velocities), coriolis_torques)	# C(q, q_dot)
         return coriolis_torques
 
     def calc_inertia(self, joint_angles):
         B_kdl = kdl.JntSpaceInertiaMatrix(self._nrOfJoints)
-        self.dyn_kdl.JntToMass(joint_angles, B_kdl)
+        self.dyn_kdl.JntToMass(self.joint_list_to_kdl(joint_angles), B_kdl)
         return B_kdl
 
     def calc_gravity(self, joint_angles):
         grav_torques = kdl.JntArray(self._nrOfJoints)
-        self.dyn_kdl.JntToGravity(joint_angles, grav_torques)
+        self.dyn_kdl.JntToGravity(self.joint_list_to_kdl(joint_angles), grav_torques)
         return grav_torques
 
     def calc_jacobian(self, joint_angles):
         j_kdl = kdl.Jacobian(self._nrOfJoints)
-        self._jac_kdl.JntToJac(joint_angles, j_kdl)
+        self._jac_kdl.JntToJac(self.joint_list_to_kdl(joint_angles), j_kdl)
         return j_kdl
 
     def get_Kd(self):
-        #TODO load param
-        Kd = np.identity(7)
-        return Kd
+        return self.Kd
 
     def get_Dd(self):
-        #TODO load param
-        Dd = np.identity(7)
-        return Dd
+        return self.Dd
 
     def get_rate(self):
         # TODO to detect if rosrate not fullfiled and return actual rate after last run
@@ -198,7 +260,7 @@ class controller():
     def get_jacobian_2(self):
         return self.jacobian_2
 
-    def get_statecondition(self):
+    def get_statecondition(self, force):
         statecondition = 1
         return statecondition
 
@@ -234,30 +296,19 @@ class controller():
                 jacobian_1 = self.get_jacobian_1() # numpy 6x7
                 jacobian_2 = self.get_jacobian_2() # numpy 6x7
                 pose_desi = self.get_pose_desi() # numpy 6x1
-                ddPose_cart = 0 # TODO add ddPose cartesian # numpy 6x1
+                ddPose_cart = np.array([0,0,0,0,0,0]) # TODO add ddPose cartesian # numpy 6x1
                 force_ee = self.get_force_ee() # numpy 7x1
                 statecondition = self.get_statecondition(force_ee) # int
 
-                cur_joint_angle = self._limb.joint_angles()#self.joint_angle # numpy 7x1
-                cur_joint_velocity = self._limb.joint_velocities()#self.joint_vel # numpy 7x1
-                cur_joint_efforts = self._limb.joint_efforts()
-                joint_angles = kdl.JntArray(self._nrOfJoints)
-                joint_velocities = kdl.JntArray(self._nrOfJoints)
-                joint_efforts = kdl.JntArray(self._nrOfJoints)
-                
-                # change data to KDL format
-                i = 0
-                for joint in self._limb.joint_names():
-                    joint_angles[i] = cur_joint_angle[joint]
-                    joint_velocities[i] = cur_joint_velocity[joint]
-                    joint_efforts[i] = cur_joint_efforts[joint]
-                    i += 1
+                cur_joint_angle = self.dictionary2list(self._limb.joint_angles())#self.joint_angle # numpy 7x1
+                cur_joint_velocity = self.dictionary2list(self._limb.joint_velocities())#self.joint_vel # numpy 7x1
+                cur_joint_efforts = self.dictionary2list(self._limb.joint_efforts())
 
-                pose = self.calc_pose(joint_angles) # numpy 6x1
-                coriolis = self.calc_coriolis(joint_angles, joint_velocities) # numpy 7x7
-                inertia = self.calc_inertia(joint_angles) # numpy 7x7
-                gravity = self.calc_gravity(joint_angles) # numpy 7x1
-                jacobian = self.calc_jacobian(joint_angles) # numpy 6x7
+                pose = self.calc_pose(cur_joint_angle) # numpy 6x1
+                coriolis = self.calc_coriolis(cur_joint_angle, cur_joint_velocity) # numpy 7x7 #TODO Error 1x1
+                inertia = self.calc_inertia(cur_joint_angle) # numpy 7x7 # TODO Error: KDL Object
+                gravity = self.calc_gravity(cur_joint_angle) # numpy 7x1 #TODO Error 1x1
+                jacobian = self.calc_jacobian(cur_joint_angle) # numpy 6x7 #TODO Error KDL Object
                 
                 # return numpy 7x1 vector of torques 
                 torque_motor = self.run_statemachine(statecondition, Kd, Dd, cur_joint_angle, cur_joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, force_ee, ddPose_cart)
@@ -269,7 +320,7 @@ class controller():
                 self.pose_1 = pose
             
             self.reset_gravity_compensation()
-            self.rate.sleep()
+            rospy.Rate(self.rate).sleep()
         self.clean_shutdown()
 
 def main():

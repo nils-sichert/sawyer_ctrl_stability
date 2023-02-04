@@ -19,6 +19,7 @@ from intera_interface import CHECK_VERSION
 
 class controller():
     def __init__(self, limb = "right"):
+        print("Initializing node...")
         rospy.init_node('Passiv_Activ_Controller', anonymous=True)
         self.Kd = rospy.get_param("Kd", [1,1,1,1,1,1])
         self.Dd = rospy.get_param("Dd", [1,1,1,1,1,1])
@@ -33,7 +34,17 @@ class controller():
 
         # create limb instance
         self._limb = intera_interface.Limb(limb)
+
         # Instance Optimal Controller
+
+        # create cuff disable publisher
+        cuff_ns = 'robot/limb/' + limb + '/suppress_cuff_interaction'
+        self._pub_cuff_disable = rospy.Publisher(cuff_ns, Empty, queue_size=1)
+
+        # create publisher to disable default gravity compensation
+        gc_ns = 'robot/limb/' + limb + '/suppress_gravity_compensation'
+        self._pub_gc_disable = rospy.Publisher(gc_ns, Empty, queue_size=1)
+        
         # Instance Robotic Chain
         urdf_filepath = "src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro"
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
@@ -49,15 +60,7 @@ class controller():
 
         self.motor_torque_pub = rospy.Publisher('computed_gc_torques_sender', JointState, queue_size=10)
         
-        # create publisher to disable default gravity compensation
-        gc_ns = 'robot/limb/' + limb + '/suppress_gravity_compensation'
-        self._pub_gc_disable = rospy.Publisher(gc_ns, Empty, queue_size=1)
         
-        # create publisher to disable cuff
-        cuff_ns = 'robot/limb/' + limb + '/suppress_cuff_interaction'
-        self._pub_cuff_disable = rospy.Publisher(cuff_ns, Empty, queue_size=1)
-
-
         ### subscriber ###
         self.lock = threading.RLock()
         self.default_gc_torques = np.empty([7,1])
@@ -89,16 +92,16 @@ class controller():
         self.jacobian_1, self.jacobian_2 = self.jacobian, self.jacobian
         
     def move_to_neutral(self):
-        #self._limb.move_to_neutral()
-        new_limb_pose = {}
-        i = 0
-        for joint in self._limb.joint_names():
-            new_limb_pose[joint] = self._init_joint_angles[i]
-            i += 1
-        self._limb.move_to_joint_positions(new_limb_pose)
-        rospy.sleep(self._waitingtime)
-        print (self._limb.joint_names())
-        print ("######## Ready for next action. ########")
+        self._limb.move_to_neutral()
+        # new_limb_pose = {}
+        # i = 0
+        # for joint in self._limb.joint_names():
+        #     new_limb_pose[joint] = self._init_joint_angles[i]
+        #     i += 1
+        # self._limb.move_to_joint_positions(new_limb_pose)
+        # rospy.sleep(self._waitingtime)
+        # print (self._limb.joint_names())
+        # print ("######## Ready for next action. ########")
 
     def callback_joint_state(self, data: JointState):
         with self.lock:
@@ -306,9 +309,17 @@ class controller():
         for i in range(len(matrix)):
             list.append(matrix[i].item(0))
         return list
+    
+    def matrix_to_joint_dict(self, matrix):
+        new_limb_torque = {}
+        i = 0
+        for joint in self._limb.joint_names():
+            new_limb_torque[joint] = matrix[i].item(0)
+            i += 1
+        return new_limb_torque
  
     def run_controller(self):
-        self.move_to_neutral
+        self.move_to_neutral()
         self._limb.set_command_timeout((1.0 / self.rate) * self._missed_cmd)
         
         controller_node = True # TODO implement a switch condition to turn it on and off
@@ -339,7 +350,12 @@ class controller():
                 # return numpy 7x1 martix of torques 
                 torque_motor = self.run_statemachine(statecondition, Kd, Dd, cur_joint_angle, cur_joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, force_ee, ddPose_cart)
                 torque_motor_list = self.matrix_to_list(torque_motor)
-                self.publish_torques(torque_motor_list, self.motor_torque_pub)
+                torque_motor_dict = self.matrix_to_joint_dict(torque_motor)
+                self._pub_cuff_disable.publish()
+                self._pub_gc_disable.publish()
+                
+                self._limb.set_joint_torques(torque_motor_dict)
+                #self.publish_torques(torque_motor_list, self.motor_torque_pub)
 
                 self.jacobian_1 = jacobian
                 self.jacobian_2 = jacobian_1

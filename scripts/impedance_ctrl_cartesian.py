@@ -6,13 +6,13 @@ class impedance_ctrl:
     def __init__(self):
         self._A = self._set_A() # 6x6
         self._A_1 = self._set_A() # 6x6
-        self._Kn = self._set_Kn() # 6x6
-        self._Dn = self._set_Dn() # 6x6
+        self._Kn = self._set_Kn() # 7x7
+        self._Dn = self._set_Dn() # 7x7
         self._qn = self._set_qn() # 7x1
         
-        self._err = np.zeros((6,1)) # 6x1
-        self._err_1 = np.zeros((6,1)) # 6x1
-        self._derr = np.zeros(6) # 6x1
+        self._err = np.zeros([6,1]) # 6x1
+        self._err_1 = np.zeros([6,1]) # 6x1
+        self._derr = np.zeros([6,1]) # 6x1
         
         
         # joint_angles, joint_velocities, pose, pose_desi, self._rate, j_numpy, grav_numpy, mass_numpy, coriolis_numpy
@@ -102,12 +102,20 @@ class impedance_ctrl:
         return err #return 3x1
     
     def _calc_nullspace(self, q, dq, N):
-        tau_nullspace = np.matmul(N,(np.matmul(-self._Kn,self._calc_err_scalar(q, self._qn))-np.matmul(self._Dn,dq)))
+        Kn_q = np.matmul(-self._Kn,self._calc_err_scalar(q, self._qn))
+
+        tau_nullspace = np.matmul(N,Kn_q)-np.matmul(self._Dn,dq)
         return tau_nullspace # return 6x1
 
     def calc_torque(self, J, Kd, Dd, C_hat, dJ, C, tau_nullspace, g, ddx, err, dErr, dq):
-        F_t = np.matmul(self._A,ddx)-np.matmul(Dd, dErr)-np.matmul(Kd, err)-np.matmul(C_hat,dErr)-self._A@dJ@dq
-        tau_motor = np.transpose(J)@F_t+np.matmul(C,dq)+g+tau_nullspace
+        print('np.matmul(self._A,ddx): ', np.matmul(self._A,ddx))
+        print('np.matmul(Dd, dErr): ',np.matmul(Dd, dErr))
+        print('np.matmul(Kd, err):' , np.matmul(Kd, err))
+        print('np.matmul(C_hat,dErr): ', np.matmul(C_hat,dErr))
+        print('self._A@dJ@dq: ',self._A@dJ@dq)
+        
+        F_t = np.matmul(self._A,ddx)-np.matmul(Dd, dErr)-np.matmul(Kd, err)-np.matmul(C_hat,dErr)-self._A@dJ@dq #6x1
+        tau_motor = np.transpose(J)@F_t+C+g+tau_nullspace #c = C*q (computed within KDL)
         return tau_motor # return 7x1
     
     """

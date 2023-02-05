@@ -13,7 +13,7 @@ class impedance_ctrl:
         self._err = np.zeros([6,1]) # 6x1
         self._err_1 = np.zeros([6,1]) # 6x1
         self._derr = np.zeros([6,1]) # 6x1
-        
+        self._joint_angle_1 = np.zeros([7,1]) # 7x1
         
         # joint_angles, joint_velocities, pose, pose_desi, self._rate, j_numpy, grav_numpy, mass_numpy, coriolis_numpy
     def run_impedance_controll(self, Kd, Dd, joint_angle, joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, ddx):
@@ -62,8 +62,17 @@ class impedance_ctrl:
         # Set new A,J,err = old A,J,err
         self._A_1 = self._A
         self._err_1 = self._err
+        self._joint_angle_1 = joint_angle
+        motor_torque = self.matrix_to_list(motor_torque)
         return motor_torque
 
+    def matrix_to_list(self, matrix):
+        # input numpy matrix vector (nx1)
+        list = []
+        for i in range(len(matrix)):
+           list.append(matrix[i].item(0))
+        return list
+    
     def _calc_derivate(self, new, old, timestep):
         dT = (1/timestep)*(new-old)
         return dT
@@ -108,11 +117,11 @@ class impedance_ctrl:
         return tau_nullspace # return 6x1
 
     def calc_torque(self, J, Kd, Dd, C_hat, dJ, C, tau_nullspace, g, ddx, err, dErr, dq):
-        print('np.matmul(self._A,ddx): ', np.matmul(self._A,ddx))
-        print('np.matmul(Dd, dErr): ',np.matmul(Dd, dErr))
-        print('np.matmul(Kd, err):' , np.matmul(Kd, err))
-        print('np.matmul(C_hat,dErr): ', np.matmul(C_hat,dErr))
-        print('self._A@dJ@dq: ',self._A@dJ@dq)
+        #print('np.matmul(self._A,ddx): ', np.matmul(self._A,ddx))
+        #print('np.matmul(Dd, dErr): ',np.matmul(Dd, dErr))
+        #print('np.matmul(Kd, err):' , np.matmul(Kd, err))
+        #print('np.matmul(C_hat,dErr): ', np.matmul(C_hat,dErr))
+        #print('self._A@dJ@dq: ',self._A@dJ@dq)
         
         F_t = np.matmul(self._A,ddx)-np.matmul(Dd, dErr)-np.matmul(Kd, err)-np.matmul(C_hat,dErr)-self._A@dJ@dq #6x1
         tau_motor = np.transpose(J)@F_t+C+g+tau_nullspace #c = C*q (computed within KDL)
@@ -153,7 +162,7 @@ class impedance_ctrl:
     def _get_Dn(self):
         return self._Dn
     def _get_qn(self):
-        return self._qn
+        return self._joint_angle_1
     def _get_err(self):
         return self._err
     def _get_err_1(self):

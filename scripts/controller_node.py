@@ -12,6 +12,7 @@ from kdl_parser_py import urdf
 from sys import argv
 from os.path import dirname, join, abspath
 from impedance_ctrl_cartesian import impedance_ctrl
+from impedance_ctrl_jointspace import impedance_jointspace
 
 import intera_interface
 from intera_interface import CHECK_VERSION
@@ -31,6 +32,7 @@ class controller():
         
         # Instance Impedance controller
         self.impedance_ctrl = impedance_ctrl()
+        self.impedance_ctrl_simple = impedance_jointspace()
 
         # create limb instance
         self._limb = intera_interface.Limb(limb)
@@ -85,23 +87,17 @@ class controller():
 
 
         # Instance state varibles (joint_angle, joint_velocity, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2)
-        self.pose_desi = self.calc_pose()
-        self.pose_1 = self.pose_desi
+        
         self.current_angle = self.joint_angle
         self.jacobian = self.calc_jacobian()
         self.jacobian_1, self.jacobian_2 = self.jacobian, self.jacobian
+
+        limit = 25
+        self.joint_efforts_safety_lower = [-limit,-limit,-limit,-limit,-limit,-limit,-limit]
+        self.joint_efforts_safety_upper = [limit,limit,limit,limit,limit,limit,limit]
         
     def move_to_neutral(self):
         self._limb.move_to_neutral()
-        # new_limb_pose = {}
-        # i = 0
-        # for joint in self._limb.joint_names():
-        #     new_limb_pose[joint] = self._init_joint_angles[i]
-        #     i += 1
-        # self._limb.move_to_joint_positions(new_limb_pose)
-        # rospy.sleep(self._waitingtime)
-        # print (self._limb.joint_names())
-        # print ("######## Ready for next action. ########")
 
     def callback_joint_state(self, data: JointState):
         with self.lock:
@@ -128,10 +124,16 @@ class controller():
         self.update_Dd()
         
     def update_Kd(self):
+        old_Kd = self.Kd
         self.Kd = np.diag(rospy.get_param("Kd", [1,1,1,1,1,1]))
+        if not np.array_equal(old_Kd, self.Kd):
+            print('New Stiffness was choosen: ', self.Kd)
 
     def update_Dd(self):
+        old_Dd = self.Dd
         self.Dd = np.diag(rospy.get_param("Dd", [1,1,1,1,1,1]))
+        if not np.array_equal(old_Dd, self.Dd):
+            print('New Damping was choosen: ', self.Dd)
 
     def run_statemachine(self, statecondition, Kd, Dd, joint_angle, joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, force_ee, ddPose_cart):
         if statecondition == 1:
@@ -139,13 +141,29 @@ class controller():
             #   Input: Kd, Dd, pose, pose_desi, joint_angles, joint_velocity, rosrate, coriolis, inertia, gravity, jacoabian, jacobian_1, jacobian_2)
             #   Output: tau_motor
             torque_motor = self.impedance_ctrl.run_impedance_controll(Kd, Dd, joint_angle, joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, ddPose_cart) #TODO correct input
+            return torque_motor
         
         elif statecondition == 2:
-        # State 2: optimal Controller
-            #   TODO implement optimal Controller
-            pass
+        # State 2: Imedance Controller simple
+            if len(Kd)<=6:
+                print('Please add joint spring, dimension to small.')
+                while len(Kd)<=6:
+                    self.update_Kd()
+                    Kd = self.Kd
+                    rospy.sleep(1)
+            
+            if len(Dd)<=6:
+                print('Please add joint damper, dimension to small.')
+                while len(Dd)<=6:
+                    self.update_Dd()
+                    Dd = self.Dd
+                    rospy.sleep(1)
+            
+            joint_angle_desi = [0.0, -1.18, 0.0, 2.18, 0.0, 0.57, 3.3161]
+            torque_motor = self.impedance_ctrl_simple.calc_torque(joint_angle_desi, joint_angle,joint_velocity,Kd,Dd, gravity)
+
+            return torque_motor 
         
-        return torque_motor
 
     def calc_pose(self, joint_values = None, link_number = 7):
         endeffec_frame = kdl.Frame()
@@ -209,7 +227,7 @@ class controller():
         return self.jacobian_2
 
     def get_statecondition(self, force):
-        statecondition = 1
+        statecondition = 2
         return statecondition
 
     def reset_gravity_compensation(self):
@@ -229,33 +247,26 @@ class controller():
         print("\nExiting example...")
         self._limb.exit_control_mode()
 
-    ##
-    # Tests to see if the given joint angles are in the joint limits.
-    # @param List of joint angles.
-    # @return True if joint angles in joint limits.
     def joints_in_limits(self, q):
         lower_lim = self.joint_limits_lower
         upper_lim = self.joint_limits_upper
         return np.all([q >= lower_lim, q <= upper_lim], 0)
 
-    ##
-    # Tests to see if the given joint angles are in the joint safety limits.
-    # @param List of joint angles.
-    # @return True if joint angles in joint safety limits.
     def joints_in_safe_limits(self, q):
         lower_lim = self.joint_safety_lower
         upper_lim = self.joint_safety_upper
         return np.all([q >= lower_lim, q <= upper_lim], 0)
 
-    ##
-    # Clips joint angles to the safety limits.
-    # @param List of joint angles.
-    # @return np.array list of clipped joint angles.
     def clip_joints_safe(self, q):
         lower_lim = self.joint_safety_lower
         upper_lim = self.joint_safety_upper
         return np.clip(q, lower_lim, upper_lim)
 
+    def clip_joints_effort_safe(self, q):
+        lower_lim = self.joint_efforts_safety_lower
+        upper_lim = self.joint_efforts_safety_upper
+        return np.clip(q, lower_lim, upper_lim)
+    
     def kdl_to_mat(self, m):
         mat =  np.mat(np.zeros((m.rows(), m.columns())))
         for i in range(m.rows()):
@@ -303,23 +314,20 @@ class controller():
             list_tmp.append(value)
         return list_tmp
     
-    def matrix_to_list(self, matrix):
-        # input numpy matrix vector (nx1)
-        list = []
-        for i in range(len(matrix)):
-            list.append(matrix[i].item(0))
-        return list
     
-    def matrix_to_joint_dict(self, matrix):
+    def list_to_joint_dict(self, list):
         new_limb_torque = {}
         i = 0
         for joint in self._limb.joint_names():
-            new_limb_torque[joint] = matrix[i].item(0)
+            new_limb_torque[joint] = list[i]
             i += 1
         return new_limb_torque
  
     def run_controller(self):
         self.move_to_neutral()
+        self.pose_desi = self.calc_pose() #TODO Error in Forward kinematic
+        self.pose_1 = self.pose_desi
+        
         self._limb.set_command_timeout((1.0 / self.rate) * self._missed_cmd)
         
         controller_node = True # TODO implement a switch condition to turn it on and off
@@ -347,15 +355,15 @@ class controller():
                 jacobian = np.atleast_2d(self.calc_jacobian()) # numpy 6x7 #TODO Error KDL Object
                 coriolis = np.atleast_2d(self.calc_coriolis()).T # numpy 7x7 #TODO Error 1x1
                 
-                # return numpy 7x1 martix of torques 
+                # return list of torques 
                 torque_motor = self.run_statemachine(statecondition, Kd, Dd, cur_joint_angle, cur_joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, force_ee, ddPose_cart)
-                torque_motor_list = self.matrix_to_list(torque_motor)
-                torque_motor_dict = self.matrix_to_joint_dict(torque_motor)
+                
+                torque_motor_dict = self.list_to_joint_dict(self.clip_joints_effort_safe((torque_motor)))
+                
                 self._pub_cuff_disable.publish()
                 self._pub_gc_disable.publish()
                 
                 self._limb.set_joint_torques(torque_motor_dict)
-                #self.publish_torques(torque_motor_list, self.motor_torque_pub)
 
                 self.jacobian_1 = jacobian
                 self.jacobian_2 = jacobian_1

@@ -4,14 +4,14 @@ class impedance_jointspace():
     def __init__(self) -> None:
         pass
 
-"""
-Good Values for testing:
-D>1: KD: [10,10,10,10,10,10,10]
-    Dd: [1,1,1,1,1,1,1]
+    """
+    Good Values for testing:
+    D>1: KD: [10,10,10,10,10,10,10]
+        Dd: [1,1,1,1,1,1,1]
 
-D = 0.7: Kd: [100,100,100,100,100,100,100]
-    Dd: [1,1,1,1,1,1,1]
-"""
+    D = 0.7: Kd: [100,100,100,100,100,100,100]
+        Dd: [1,1,1,1,1,1,1]
+    """
     def calc_torque(self, joint_angle_desi, cur_joint_angle, cur_joint_velo, Kd, Dd, gravity):
         torque_list = [0]*len(joint_angle_desi)
         

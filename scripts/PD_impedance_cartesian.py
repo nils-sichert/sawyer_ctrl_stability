@@ -40,11 +40,18 @@ class PD_Impedance_ctrl():
 
         # Desired Torque
         motor_torque = Jt @ (-(Kd @ err_cart+Dd @ derr_cart)+F_load)+coriolis+gravity+tau_nullspace
-        return motor_torque
+        return self.vec2list(motor_torque)
     
     def get_F_load(self):
         F_load = np.zeros((6,1))
         return F_load
+    
+    def vec2list(self,vec):
+        len_vec = len(vec)
+        list = [0]*len_vec
+        for i in range(len_vec):
+            list[i] = vec[i][0,0]
+        return list
     
 def main():
     Jacobian = np.random.rand(6,7) # numpy 6x1

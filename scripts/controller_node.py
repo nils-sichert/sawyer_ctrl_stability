@@ -63,12 +63,6 @@ class controller():
         self.dyn_kdl = kdl.ChainDynParam(self._robot_chain, self.grav_vector)
         self._joint_names = self._limb.joint_names()
       
-        ### subscriber ###
-        
-        # robot joint state subscriber
-        rospy.Subscriber('robot/joint_states', JointState, self.callback_joint_state)
-        self.robot_sea_state_subscriber = rospy.Subscriber('robot/limb/' + limb + '/gravity_compensation_torques', SEAJointState, self.callback_default_gc)
-    
         # verify robot is enabled
         print("Getting robot state... ")
         self._rs = intera_interface.RobotEnable(CHECK_VERSION)
@@ -85,9 +79,9 @@ class controller():
         # Instance state varibles
         self.jacobian = self.calc_jacobian()
         self.jacobian_1, self.jacobian_2 = self.jacobian, self.jacobian
+        self.torque_motor_t_1 = None
 
-    def move_to_neutral(self):
-        self._limb.move_to_neutral()
+        
 
     def publish_torques(self, torques, publisher: rospy.Publisher):
         msg = JointState()
@@ -196,6 +190,15 @@ class controller():
         self._jac_kdl.JntToJac(self.joints_to_kdl('positions',joint_values), jacobian)
         return self.kdl_to_mat(jacobian)
 
+    def lowpass_filter(self, y_t, y_t_1, a=1):
+        if len(y_t) is not len(y_t_1):
+            print("Err Controller_node.py: Length of input lowpass filter is not equal.")
+        
+        else:
+            y = [0]*len(y_t)
+            for i in range(len(y_t)):
+                y[i] = (1-a)*y_t_1[i]+a*y_t[i]
+        return y
 
     """ Robot safety methods """
     
@@ -266,7 +269,7 @@ class controller():
         return new_limb_torque
  
     def run_controller(self):
-        self.move_to_neutral()
+        self._limb.move_to_neutral()
         self.pose_desi = self.calc_pose() #TODO Error in Forward kinematic
         self.pose_1 = self.pose_desi
         
@@ -298,11 +301,15 @@ class controller():
                 self._pub_gc_disable.publish()
                 
                 ### Transfer controller output in msg format dictionary
+                if self.torque_motor_t_1 is not None:
+                    torque_motor = self.lowpass_filter(torque_motor, self.torque_motor_t_1)
+                
                 torque_motor_dict = self.list2dictionary(self.clip_joints_effort_safe((torque_motor)))
                 
                 ### Publish Joint torques
                 self._limb.set_joint_torques(torque_motor_dict)
 
+                self.torque_motor_t_1 = torque_motor
                 self.jacobian_1 = jacobian
                 self.jacobian_2 = jacobian_1
                 self.pose_1 = pose
@@ -338,7 +345,7 @@ class controller():
         return copy.deepcopy(self.jacobian_2)
 
     def get_statecondition(self, force):
-        statecondition = 2
+        statecondition = 3
         return statecondition
 
   
@@ -353,3 +360,15 @@ if __name__ == "__main__":
         pass
 
 
+'''
+apply force in gazebo:
+rosservice call /gazebo/apply_body_wrench "body_name: 'sawyer::right_l6'
+reference_frame: 'sawyer::base'
+reference_point: {x: 0.0, y: 0.0, z: 0.0}
+wrench:
+  force: {x: 10.0, y: 0.0, z: 0.0}
+  torque: {x: 0.0, y: 0.0, z: 0.0}
+start_time: {secs: 0, nsecs: 0}
+duration: {secs: 5, nsecs: 0}" 
+
+'''

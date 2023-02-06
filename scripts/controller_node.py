@@ -15,6 +15,8 @@ from os.path import dirname, join, abspath
 from DLR_impedance_ctrl_cartesian import impedance_ctrl
 from spring_damper_jointspace import impedance_jointspace
 from PD_impedance_cartesian import PD_Impedance_ctrl
+from PD_impedance_joint_woMass_wGrav_wCoriolis import PD_Impedance_ctrl_woutMass
+from scipy.spatial.transform import Rotation as R
 
 import intera_interface
 from intera_interface import CHECK_VERSION
@@ -24,8 +26,10 @@ class controller():
     def __init__(self, limb = "right"):
         print("Initializing node...")
         rospy.init_node('Passiv_Activ_Controller', anonymous=True)
-        self.Kd = rospy.get_param("Kd", [1,1,1,1,1,1])
-        self.Dd = rospy.get_param("Dd", [1,1,1,1,1,1])
+        self.Kd = rospy.get_param("/Kd", [100,100,100,100,100,100])
+        self.Dd = rospy.get_param("/Dd", [1,1,1,1,1,1])
+        self.lowpass_coeff = rospy.get_param("/Lowpass_weight", 1)
+        self.controller_flag = rospy.get_param("/Control_flag", True)
         self._init_joint_angles = rospy.get_param("Init_angle", [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981])
         self.lock = threading.RLock()
 
@@ -37,6 +41,7 @@ class controller():
         self.impedance_ctrl = impedance_ctrl()
         self.impedance_ctrl_simple = impedance_jointspace()
         self.PD_impedance_ctrl_cart = PD_Impedance_ctrl()
+        self.PD_impedance_ctrl_cart_woutMass  = PD_Impedance_ctrl_woutMass()
 
         # create limb instance
         self._limb = intera_interface.Limb(limb)
@@ -50,6 +55,8 @@ class controller():
         gc_ns = 'robot/limb/' + limb + '/suppress_gravity_compensation'
         self._pub_gc_disable = rospy.Publisher(gc_ns, Empty, queue_size=1)
         
+        ### Debug Publisher ###
+        self._pub_error = rospy.Publisher('EE_Pose_Error', JointState, queue_size=1)
 
         ### Robot ###
         # Instance Robotic Chain
@@ -72,7 +79,7 @@ class controller():
         print("Running. Ctrl-c to quit")
 
         # Robot limit and safety
-        limit = 25
+        limit = 100
         self.joint_efforts_safety_lower = [-limit,-limit,-limit,-limit,-limit,-limit,-limit]
         self.joint_efforts_safety_upper = [limit,limit,limit,limit,limit,limit,limit]
 
@@ -80,12 +87,12 @@ class controller():
         self.jacobian = self.calc_jacobian()
         self.jacobian_1, self.jacobian_2 = self.jacobian, self.jacobian
         self.torque_motor_t_1 = None
+        self.timestamp_t_1 = 0
 
-        
-
-    def publish_torques(self, torques, publisher: rospy.Publisher):
+    def publish_error(self, error_pos, error_vel, publisher: rospy.Publisher):
         msg = JointState()
-        msg.effort = torques
+        msg.position = error_pos
+        msg.velocity = error_vel
         publisher.publish(msg)
 
     def update_parameters(self):
@@ -95,10 +102,11 @@ class controller():
         jacobian_1 = self.get_jacobian_1() # numpy 6x7
         jacobian_2 = self.get_jacobian_2() # numpy 6x7
         pose_desi = self.get_pose_desi() # numpy 6x1
+        velocities_desi = self.get_velocities_desi()
         ddPose_cart = np.atleast_2d(np.array([0,0,0,0,0,0])).T # TODO add ddPose cartesian # numpy 6x1
         force_ee = self.get_force_ee() # numpy 7x1
 
-        return Kd, Dd, rate, jacobian_1, jacobian_2, pose_desi, ddPose_cart, force_ee
+        return Kd, Dd, rate, jacobian_1, jacobian_2, pose_desi, velocities_desi, ddPose_cart, force_ee
         
     def update_Kd(self):
         old_Kd = self.Kd
@@ -114,17 +122,19 @@ class controller():
             print('New Damping was choosen: ', self.Dd)
         return self.Dd
     
-    def run_statemachine(self, statecondition, Kd, Dd, joint_angle, joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, force_ee, ddPose_cart):
+    def run_statemachine(self, statecondition, Kd, Dd, joint_angle, joint_velocity, rate, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, force_ee, ddPose_cart, err_cart, err_vel_cart):
         if statecondition == 1: # State 1: Impedance Controller
         
             #   Input: Kd, Dd, pose, pose_desi, joint_angles, joint_velocity, rosrate, coriolis, inertia, gravity, jacoabian, jacobian_1, jacobian_2)
             #   Output: tau_motor
-            motor_torque = self.impedance_ctrl.run_impedance_controll(Kd, Dd, joint_angle, joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, ddPose_cart) #TODO correct input
+            Kd = np.diag([10,10,10,10,10,10,10])
+            joint_angle_desi = [0.0, -1.18, 0.0, 2.18, 0.0, 0.57, 3.3161]
+            motor_torque = self.PD_impedance_ctrl_cart_woutMass.calc_joint_torque(jacobian, gravity, Kd, err_cart, err_vel_cart, coriolis, joint_angle_desi, joint_angle, joint_velocity) #TODO correct input
             return motor_torque
         
         elif statecondition == 2: # State 2: Imedance Controller simple
         
-            if len(Kd)<=6:
+            """ if len(Kd)<=6:
                 print('Please add joint spring, dimension to small.')
                 while len(Kd)<=6:
                     self.update_Kd()
@@ -136,37 +146,51 @@ class controller():
                 while len(Dd)<=6:
                     self.update_Dd()
                     Dd = self.Dd
-                    rospy.sleep(1)
-            
+                    rospy.sleep(1) """
+            Kd = np.diag([10,10,10,10,10,10,10])
+            Dd = np.diag([1,1,1,1,1,1,1])
             joint_angle_desi = [0.0, -1.18, 0.0, 2.18, 0.0, 0.57, 3.3161]
             motor_torque = self.impedance_ctrl_simple.calc_torque(joint_angle_desi, joint_angle,joint_velocity,Kd,Dd, gravity)
 
             return motor_torque
         
         elif statecondition == 3: # State 3: PD impedance Controller
-            err_cart = np.random.rand(6,1)*0.01 # numpy 6x1
-            derr_cart = np.random.rand(6,1)*0.01# numpy 6x1
-            motor_torque = self.PD_impedance_ctrl_cart.calc_joint_torque(jacobian, gravity, Kd, joint_angle, joint_velocity, err_cart, derr_cart, inertia, coriolis)
+            motor_torque = self.PD_impedance_ctrl_cart.calc_joint_torque(jacobian, gravity, Kd, joint_angle, joint_velocity, err_cart, err_vel_cart, inertia, coriolis)
             return motor_torque
         
         else:
             print('State does not exists. Exiting...')
             pass
         
-    def calc_pose(self, joint_values = None, link_number = 7):
+    def calc_pose(self, type, joint_values = None, link_number = 7):
         endeffec_frame = kdl.Frame()
-        kinematics_status = self.FKSolver.JntToCart(self.joints_to_kdl('positions',joint_values),
+        if type == 'positions':
+            kinematics_status = self.FKSolver.JntToCart(self.joints_to_kdl('positions',joint_values),
                                                    endeffec_frame,
                                                    link_number)
+        elif type == 'velocities':
+            kinematics_status = self.FKSolver.JntToCart(self.joints_to_kdl('velocities',joint_values),
+                                                   endeffec_frame,
+                                                   link_number)
+        else:
+            print('Err: [Calc_pose] Wrong type choosen.')
+
         if kinematics_status >= 0:
             p = endeffec_frame.p
-
+            pos_vec = [p.x(),p.y(),p.z()]
             M = endeffec_frame.M
-            return np.array([p.x(), p.y(), p.z(),0,0,0])
-            # return np.mat([[M[0,0], M[0,1], M[0,2], p.x()], 
-                        #    [M[1,0], M[1,1], M[1,2], p.y()], 
-                        #    [M[2,0], M[2,1], M[2,2], p.z()],
-                        #    [     0,      0,      0,     1]])
+            rot_mat = np.mat([[M[0,0], M[0,1], M[0,2]],
+                            [M[1,0], M[1,1], M[1,2]], 
+                            [M[2,0], M[2,1], M[2,2]]])
+            r = R.from_matrix(rot_mat)
+            rot_vec = r.as_rotvec()
+            pose = [0]*6
+            for i in range(3):
+                pose[i]= pos_vec[i]
+                pose[i+3] = rot_vec[i]
+
+            return pos_vec, rot_mat, pose
+                            
         else:
             return None
     
@@ -190,14 +214,30 @@ class controller():
         self._jac_kdl.JntToJac(self.joints_to_kdl('positions',joint_values), jacobian)
         return self.kdl_to_mat(jacobian)
 
-    def lowpass_filter(self, y_t, y_t_1, a=1):
+    def calc_error(self, pos_vec, rot_mat, pose_desi):
+        err_pos = np.array([pos_vec[0]-pose_desi[0], pos_vec[1]-pose_desi[1], pos_vec[2]-pose_desi[2]])
+
+        rot_vect_desi = np.array([pose_desi[3],pose_desi[4],pose_desi[5]])
+        r = R.from_matrix([rot_mat])
+        rot_vec_cur = r.as_rotvec()
+
+        err_rot = rot_vec_cur-rot_vect_desi
+        err = [0]*6
+        for i in range(3):
+            err[i]=err_pos[i]
+            err[i+3]=err_rot[0][i]
+        
+        err = np.atleast_2d(err).T
+        return err
+
+    def lowpass_filter(self, y_t, y_t_1):
         if len(y_t) is not len(y_t_1):
             print("Err Controller_node.py: Length of input lowpass filter is not equal.")
         
         else:
             y = [0]*len(y_t)
             for i in range(len(y_t)):
-                y[i] = (1-a)*y_t_1[i]+a*y_t[i]
+                y[i] = (1-self.lowpass_coeff)*y_t_1[i]+self.lowpass_coeff*y_t[i]
         return y
 
     """ Robot safety methods """
@@ -232,7 +272,7 @@ class controller():
 
     def joints_to_kdl(self, type, values=None):
         kdl_array = kdl.JntArray(self._nrOfJoints)
-
+    
         if values is None:
             if type == 'positions':
                 cur_type_values = self._limb.joint_angles()
@@ -267,56 +307,16 @@ class controller():
             new_limb_torque[joint] = list[i]
             i += 1
         return new_limb_torque
+
+    def get_cur_pose(self, pos_vec, rot_mat):
+        r = R.from_matrix(rot_mat)
+        rot_vec = r.as_rotvec()
+        pose = [0]*6
+        for i in range(3):
+            pose[i]=pos_vec[i]
+            pose[i+3] = rot_vec[i]
+        return pose
  
-    def run_controller(self):
-        self._limb.move_to_neutral()
-        self.pose_desi = self.calc_pose() #TODO Error in Forward kinematic
-        self.pose_1 = self.pose_desi
-        
-        self._limb.set_command_timeout((1.0 / self.rate) * self._missed_cmd)
-        
-        controller_node = True # TODO implement a switch condition to turn it on and off
-        
-        while not rospy.is_shutdown():
-            if controller_node == True:
-                Kd, Dd, rate, jacobian_1, jacobian_2, pose_desi, ddPose_cart, force_ee = self.update_parameters() # updates Kd, Dd
-                statecondition = self.get_statecondition(force_ee) # int
-
-                ### get current Joint-angle, -velocity and -effort
-                cur_joint_angle = np.atleast_2d(self.dictionary2list(self._limb.joint_angles())).T          # numpy 7x1
-                cur_joint_velocity = np.atleast_2d(self.dictionary2list(self._limb.joint_velocities())).T   # numpy 7x1
-                cur_joint_efforts = np.atleast_2d(self.dictionary2list(self._limb.joint_efforts())).T
-
-                pose = np.atleast_2d(self.calc_pose()).T        # numpy 6x1
-                inertia = np.atleast_2d(self.calc_inertia())    # numpy 7x7 
-                gravity = np.atleast_2d(self.calc_gravity()).T  # numpy 7x1 
-                jacobian = np.atleast_2d(self.calc_jacobian())  # numpy 6x7 
-                coriolis = np.atleast_2d(self.calc_coriolis()).T # numpy 7x7 
-                
-                ### Calculate motor torque for each joint motor
-                torque_motor = self.run_statemachine(statecondition, Kd, Dd, cur_joint_angle, cur_joint_velocity, rate, pose, pose_desi, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, force_ee, ddPose_cart)
-                
-                ### Disable cuff and gravitation compensation
-                self._pub_cuff_disable.publish()
-                self._pub_gc_disable.publish()
-                
-                ### Transfer controller output in msg format dictionary
-                if self.torque_motor_t_1 is not None:
-                    torque_motor = self.lowpass_filter(torque_motor, self.torque_motor_t_1)
-                
-                torque_motor_dict = self.list2dictionary(self.clip_joints_effort_safe((torque_motor)))
-                
-                ### Publish Joint torques
-                self._limb.set_joint_torques(torque_motor_dict)
-
-                self.torque_motor_t_1 = torque_motor
-                self.jacobian_1 = jacobian
-                self.jacobian_2 = jacobian_1
-                self.pose_1 = pose
-            
-            rospy.Rate(self.rate).sleep()
-        self.clean_shutdown()
-    
     def clean_shutdown(self):
         """
         Switches out of joint torque mode to exit cleanly
@@ -327,12 +327,21 @@ class controller():
     """ Getter methods"""
 
     def get_rate(self):
-        # TODO to detect if rosrate not fullfiled and return actual rate after last run
-        return self.rate
+        time_now = rospy.get_time()
+        if self.timestamp_t_1 != 0:
+            period = time_now -self.timestamp_t_1
+        else:
+            period = 1/self.rate # period time in sec
+        self.timestamp_t_1 = time_now    
+        return period
 
     def get_pose_desi(self):
-        # TODO implement callback for pose
+        # TODO implement callback/ subscriber for pose
         return self.pose_desi
+    
+    def get_velocities_desi(self):
+        vel_desi = np.array([0,0,0,0,0,0]) # 6x1 TODO implement subscriber
+        return vel_desi
 
     def get_force_ee(self):
         # TODO implement get_force_ee
@@ -345,9 +354,69 @@ class controller():
         return copy.deepcopy(self.jacobian_2)
 
     def get_statecondition(self, force):
-        statecondition = 3
+        statecondition = rospy.get_param("Controllerstate", 2)
         return statecondition
 
+    def run_controller(self):
+        self._limb.move_to_neutral()
+        pos_vec, rot_mat, pose = self.calc_pose(type='positions')
+        
+        # Init hold actual position
+        self.pose_desi = self.get_cur_pose(pos_vec, rot_mat)
+        self.pose_1 = self.pose_desi
+        
+        # Set limb controller timeout to return to Sawyer position controller
+        self._limb.set_command_timeout((1.0 / self.rate) * self._missed_cmd)
+        
+        
+        while not rospy.is_shutdown():
+            if self.controller_flag == True:
+                Kd, Dd, rate, jacobian_1, jacobian_2, pose_desi, velocities_desi, ddPose_cart, force_ee = self.update_parameters() # updates Kd, Dd
+                statecondition = self.get_statecondition(force_ee) # int
+
+                ### get current Joint-angle, -velocity and -effort
+                cur_joint_angle = np.atleast_2d(self.dictionary2list(self._limb.joint_angles())).T          # numpy 7x1
+                cur_joint_velocity = np.atleast_2d(self.dictionary2list(self._limb.joint_velocities())).T   # numpy 7x1
+                cur_joint_efforts = np.atleast_2d(self.dictionary2list(self._limb.joint_efforts())).T
+                
+                ### Update position/ velocity errors, inertia, gravity, jacobian, coriolis
+                pos_vec, rot_mat, pose = self.calc_pose(type='positions') 
+                err_pos_cart = self.calc_error(pos_vec, rot_mat, pose_desi)      # numpy 6x1
+                vel_vec, vel_rot_mat, velo_pose = self.calc_pose(type='velocities')
+                err_vel_cart = self.calc_error(vel_vec, vel_rot_mat, velocities_desi)
+
+                inertia = np.atleast_2d(self.calc_inertia())    # numpy 7x7 
+                gravity = np.atleast_2d(self.calc_gravity()).T  # numpy 7x1 
+                jacobian = np.atleast_2d(self.calc_jacobian())  # numpy 6x7 
+                coriolis = np.atleast_2d(self.calc_coriolis()).T # numpy 7x7 
+                
+                ### Calculate motor torque for each joint motor
+                torque_motor = self.run_statemachine(statecondition, Kd, Dd, cur_joint_angle, cur_joint_velocity, rate, coriolis, inertia, gravity, jacobian, jacobian_1, jacobian_2, force_ee, ddPose_cart, err_pos_cart, err_vel_cart)
+                
+                ### Disable cuff and gravitation compensation and publish debug values
+                self._pub_cuff_disable.publish()
+                self._pub_gc_disable.publish()
+                self.publish_error(err_pos_cart, err_vel_cart, self._pub_error)
+                
+                ### Transfer controller output in msg format dictionary
+                if self.torque_motor_t_1 is not None:
+                    torque_motor = self.lowpass_filter(torque_motor, self.torque_motor_t_1)
+                
+                torque_motor_dict = self.list2dictionary(self.clip_joints_effort_safe((torque_motor)))
+                
+                ### Publish Joint torques
+                self._limb.set_joint_torques(torque_motor_dict)
+
+                ### Set values for t-1 calcualtions
+                self.torque_motor_t_1 = torque_motor
+                self.jacobian_1 = jacobian
+                self.jacobian_2 = jacobian_1
+                self.pose_1 = pose
+                self.d_pose_1 = velo_pose
+            
+            rospy.Rate(self.rate).sleep()
+        self.clean_shutdown()
+   
   
 def main():
     control = controller()
@@ -366,7 +435,7 @@ rosservice call /gazebo/apply_body_wrench "body_name: 'sawyer::right_l6'
 reference_frame: 'sawyer::base'
 reference_point: {x: 0.0, y: 0.0, z: 0.0}
 wrench:
-  force: {x: 10.0, y: 0.0, z: 0.0}
+  force: {x: 100.0, y: 0.0, z: 0.0}
   torque: {x: 0.0, y: 0.0, z: 0.0}
 start_time: {secs: 0, nsecs: 0}
 duration: {secs: 5, nsecs: 0}" 

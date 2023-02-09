@@ -1,6 +1,6 @@
 import numpy as np
 
-class impedance_jointspace():
+class spring_damper_jointspace():
     def __init__(self) -> None:
         pass
 

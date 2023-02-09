@@ -220,23 +220,12 @@ class GCController(object):
                 print ("-- Reset to neutral OFF.")
         else:
             print ("-- Reset to neutral ON.")
-            self.move_to_neutral()def move_to_neutral(self):
-        """
-        Moves the limb to neutral location.
-        """
-        #self._limb.move_to_neutral()
-        sawyer_neutral_pose = [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981]
-        new_limb_pose = {}
-        i = 0
-        for joint in self._limb.joint_names():
-            new_limb_pose[joint] = sawyer_neutral_pose[i]
-            i += 1
-        self._limb.move_to_joint_positions(new_limb_pose)
-        rospy.sleep(self._waitingtime)
-        print (self._limb.joint_names())
+            self.move_to_neutral()
+        
+    
         print ("######## Ready for next action. ########")
 
-        (ok, robot) = urdf.treeFromFile('sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro')
+        (ok, robot) = urdf.treeFromFile('src/sawyer_robot/sawyer_description/urdf/sawyer_base.gazebo.xacro')
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()
         self._jac_kdl = KDL.ChainJntToJacSolver(self._robot_chain)
@@ -252,6 +241,21 @@ class GCController(object):
         self.Fa_data = []
                             
         print("Running. Ctrl-c to quit")
+
+    def move_to_neutral(self):
+        """
+        Moves the limb to neutral location.
+        """
+        #self._limb.move_to_neutral()
+        sawyer_neutral_pose = [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981]
+        new_limb_pose = {}
+        i = 0
+        for joint in self._limb.joint_names():
+            new_limb_pose[joint] = sawyer_neutral_pose[i]
+            i += 1
+        self._limb.move_to_joint_positions(new_limb_pose)
+        rospy.sleep(self._waitingtime)
+        print (self._limb.joint_names())
 
     def _get_current_ee_pose(self):
         return _ee_pose[0]

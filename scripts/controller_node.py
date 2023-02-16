@@ -30,12 +30,18 @@ class controller():
     def __init__(self, limb = "right"):
         print("Initializing node...")
         rospy.init_node('Passiv_Activ_Controller', anonymous=True)
-        rospy.set_param("/Control_flag", True)
-        rospy.set_param("/joint_angle_desi", [0.0, -1.18, 0.0, 2.18, 0.0, 0.57, 3.3161])
-        rospy.set_param("/joint_velocity_desi", [0, 0, 0, 0, 0, 0, 0])
-        self.Kd = rospy.set_param("/Kd", 100)
-        self.lowpass_coeff = rospy.get_param("/Lowpass_weight", 0.7)
+        rospy.set_param("control_node/control_flag", False)
+        rospy.set_param("control_node/joint_angle_desi", [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981])
+        rospy.set_param("control_node/joint_velocity_desi", [0, 0, 0, 0, 0, 0, 0])
+        rospy.set_param("control_node/controllerstate", 2)
+        self.Kd = rospy.set_param("control_node/Kd", 100)
+        self.lowpass_coeff = rospy.get_param("control_node/Lowpass_weight", 0.7)
         self.lock = threading.RLock()
+
+        # set neutral pose of sawyer
+        rospy.set_param("named_poses/right/poses/neutral", [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981])
+        
+        
 
         # control parameters
         self.rate = 100 # Controlrate - 100Hz
@@ -130,7 +136,7 @@ class controller():
         Return: Kd (7x7)
         """
         old_Kd = self.Kd
-        tmp = rospy.get_param("Kd")
+        tmp = rospy.get_param("control_node/Kd")
         self.Kd = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
         if not np.array_equal(old_Kd, self.Kd):
             print('New Stiffness was choosen: ', self.Kd)
@@ -240,7 +246,7 @@ class controller():
         curr_velocity_tmp = np.zeros((6,1))
         for i in range(6):
             curr_velocity_tmp[i] = curr_velocity[i][0,0]
-        error_velocity = curr_velocity_tmp - velocity_d
+        error_velocity = curr_velocity_tmp - curr_velocity_tmp # TODO change to not zero and actual error
         
         # Acceleration Vector
         ddx = np.zeros((6,1))
@@ -467,7 +473,7 @@ class controller():
         Parameters: None
         Return: statecondition (int)
         """
-        statecondition = rospy.get_param("Controllerstate", 1)
+        statecondition = rospy.get_param("control_node/controllerstate")
         return statecondition
     
 
@@ -494,14 +500,17 @@ class controller():
         
             Kd = np.diag([10,10,10,10,10,10,10])
             Dd = np.diag([1,1,1,1,1,1,1])
-            joint_angle_desi = [0.0, -1.18, 0.0, 2.18, 0.0, 0.57, 3.3161]
+            joint_angle_desi = rospy.get_param("control_node/joint_angle_desi")
             motor_torque = self.impedance_ctrl_simple.calc_torque(joint_angle_desi, cur_joint_angle, cur_joint_velocity,Kd,Dd, gravity)
 
             return motor_torque
         
         elif statecondition == 3: # State 3: PD impedance Controller
-            joint_angle_desi = [0.0, -1.18, 0.0, 2.18, 0.0, 0.57, 3.3161]
+            joint_angle_desi = rospy.get_param("control_node/joint_angle_desi")
             Kd = np.diag([50,50,50,50,50,50,50])
+            print('Err_pos_cart: ', err_pose_cart)
+            print('ddx: ', ddx)
+            print('err_vel_cart: ', err_vel_cart)
             motor_torque = self.PD_impedance_ctrl_cart_woutMass.calc_joint_torque(jacobian, gravity, Kd, err_pose_cart, err_vel_cart, coriolis, joint_angle_desi, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error)
             return motor_torque
         
@@ -515,7 +524,9 @@ class controller():
         Parameters: None
         Return: motor torques (dict: 7x1)
         """
-        self._limb.move_to_neutral()
+        timeout = 4 # @type timeout: float / @param timeout: seconds to wait for move to finish [15]
+        speed = 0.2 # @type speed: float / @param speed: ratio of maximum joint speed for execution default= 0.3; range= [0.0-1.0]
+        self._limb.move_to_neutral(timeout, speed)
         pos_vec, rot_mat, pose = self.calc_pose(type='positions')
         
         # Init hold actual position
@@ -526,9 +537,9 @@ class controller():
         self._limb.set_command_timeout((1.0 / self.rate) * self._missed_cmd)
         
         while not rospy.is_shutdown():
-            controller_flag = rospy.get_param("/Control_flag")
-            joint_angle_desi = np.atleast_2d(np.array(rospy.get_param("/joint_angle_desi"))).T
-            joint_velocity_desi = np.atleast_2d(np.array(rospy.get_param("/joint_velocity_desi"))).T
+            controller_flag = rospy.get_param("control_node/control_flag")
+            joint_angle_desi = np.atleast_2d(np.array(rospy.get_param("control_node/joint_angle_desi"))).T
+            joint_velocity_desi = np.atleast_2d(np.array(rospy.get_param("control_node/joint_velocity_desi"))).T
 
 
             if controller_flag == True:

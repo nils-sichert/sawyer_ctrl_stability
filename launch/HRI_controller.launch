@@ -7,6 +7,6 @@
   </include>
 
   <!-- Start the Sawyer pick and place demo -->
-  <node pkg="sawyer_sim_examples" type="first_move_test.py" name="first_move_test" />
+  <node pkg="sawyer_ctrl_stability" type="controller_node.py" name="controller_node" />
 
 </launch>

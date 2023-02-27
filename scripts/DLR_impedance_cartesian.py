@@ -1,7 +1,8 @@
+#!/usr/bin/env python
 import numpy as np
 from scipy.linalg import sqrtm
 
-class PD_Impedance_ctrl_cart():
+class DLR_Impedance_Cartesian():
     def __init__(self) -> None:
         self._Kn = np.diag([1,1,1,1,1,1,1]) # positiv definite stiffness matrix - 7x7 matrix
         self._Dn = np.diag([1,1,1,1,1,1,1]) # positiv definite damping matrix - 7x7 matrix

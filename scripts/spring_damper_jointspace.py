@@ -1,6 +1,7 @@
+#!/usr/bin/env python
 import numpy as np
 
-class spring_damper_jointspace():
+class Spring_damper_jointspace():
     def __init__(self) -> None:
         pass
 

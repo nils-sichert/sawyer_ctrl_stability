@@ -8,12 +8,15 @@ from intera_core_msgs.msg import JointLimits, SEAJointState
 import threading
 import PyKDL as kdl
 import copy
+import sys
 from kdl_parser_py import urdf
 from sys import argv
+sys.path.append('~/ros_ws/devel/lib/sawyer_ctrl_stability')
+
 from os.path import dirname, join, abspath
-from spring_damper_jointspace import spring_damper_jointspace
-from DLR_impedance_cartesian import PD_Impedance_ctrl_cart
-from PD_impedance_joint_woMass_wGrav_wCoriolis import PD_Impedance_ctrl_woutMass
+from spring_damper_jointspace import Spring_damper_jointspace
+from DLR_impedance_cartesian import DLR_Impedance_Cartesian
+from PD_impedance_jointspace import PD_Impedance_ctrl_woutMass
 from scipy.spatial.transform import Rotation as R
 
 import intera_interface
@@ -40,16 +43,16 @@ class controller():
 
         # set neutral pose of sawyer
         rospy.set_param("named_poses/right/poses/neutral", [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981])
-        
-        
+         
+         
 
         # control parameters
         self.rate = 100 # Controlrate - 100Hz
         self._missed_cmd = 20 # Missed cycles before triggering timeout
         
         # Instance Controller
-        self.impedance_ctrl_simple = spring_damper_jointspace()
-        self.PD_impedance_ctrl_cart = PD_Impedance_ctrl_cart()
+        self.impedance_ctrl_simple = Spring_damper_jointspace()
+        self.DLR_Impedance_Cartesian = DLR_Impedance_Cartesian()
         self.PD_impedance_ctrl_cart_woutMass  = PD_Impedance_ctrl_woutMass()
 
         # create limb instance
@@ -493,7 +496,7 @@ class controller():
         
         if statecondition == 1: # State 1: Cartesian impedance control (Source DLR: Alin Albu-Schäffer )
             Kd = Kd[:6,:6]
-            motor_torque = self.PD_impedance_ctrl_cart.calc_joint_torque(Kd, ddx, cur_joint_angle, cur_joint_velocity, err_pose_cart, err_vel_cart, inertia, coriolis, jacobian, djacobian, gravity, sampling_time)
+            motor_torque = self.DLR_Impedance_Cartesian.calc_joint_torque(Kd, ddx, cur_joint_angle, cur_joint_velocity, err_pose_cart, err_vel_cart, inertia, coriolis, jacobian, djacobian, gravity, sampling_time)
             return motor_torque
         
         elif statecondition == 2: # State 2: Imedance Controller simple

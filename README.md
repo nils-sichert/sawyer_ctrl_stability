@@ -29,7 +29,7 @@ Install necessary packages:
 
 ### Launch controller:
 ```bash
-  
+  roslaunch sawyer_ctrl_stability HRI_controller.launch
 ```
 
 ### Start/ Stop controller - default: controller stoped:
@@ -63,7 +63,7 @@ Velocity:
 3: PD impedance control
 
 ```bash
-  rosparam set control_node/controllerstate 1
+  rosparam set control_node/controllerstate 2
 ```
 
 ### Set joint stifness, creates diagonal matrix from value - default: 100 

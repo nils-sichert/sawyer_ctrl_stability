@@ -27,3 +27,7 @@ class Spring_damper_jointspace():
         for i in range(len(array)):
             list[i] = array[i][0]
         return list
+
+if __name__ == "__main__":
+    ctrl = Spring_damper_jointspace()
+    print("Spring damper Ctrl started")

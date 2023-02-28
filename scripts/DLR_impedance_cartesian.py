@@ -10,6 +10,7 @@ class DLR_Impedance_Cartesian():
         self._D_eta = np.diag([0.7,0.7,0.7,0.7,0.7,0.7])
         self._flag_nullspace = False # True: free Nullspace movement allowed
         self._lambda_prev = np.zeros((6,6))
+        
 
     def calc_joint_torque(self,  Kd, ddx, q, dq, err_cart, derr_cart, inertia, coriolis, jacobian, djacobian_filtered, gravity, Sampling_Time, external_load = 0):
         '''
@@ -56,3 +57,7 @@ class DLR_Impedance_Cartesian():
 
             list[i] = vec[i][0,0]
         return list
+
+if __name__ == "__main__":
+    ctrl = DLR_Impedance_Cartesian()
+    print("DLR Impedance started")

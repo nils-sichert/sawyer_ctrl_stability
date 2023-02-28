@@ -7,9 +7,9 @@ import rospy
 
 class PD_Impedance_ctrl_woutMass():
     def __init__(self):
-        rospy.set_param("/Dd", 1)
+        pass
 
-    def calc_joint_torque(self, Jacobian, gravity, Kd, err_cart, derr_cart, coriolis, joint_angle_desi, cur_joint_angle, cur_joint_velo,joint_angle_error, joint_velocity_error):
+    def calc_joint_torque(self, Jacobian, gravity, Kd, Dd, err_cart, derr_cart, coriolis, joint_angle_desi, cur_joint_angle, cur_joint_velo,joint_angle_error, joint_velocity_error):
         '''
         Input: Jacobian dim:6x7 (J), gravity torque dim:7x1 (g), stiffness matrix dim:6x6 (Kd), joint_angle dim:7x1 (q),
                 joint_velocity dim: 7x1 (dq), cartesian pose error dim:6x1 (err_cart), cartesian velocity error dim:(6x1) (derr_cart),
@@ -36,3 +36,7 @@ class PD_Impedance_ctrl_woutMass():
         for i in range(len_vec):
             list[i] = vec[i][0]
         return list
+
+if __name__ == "__main__":
+    ctrl = PD_Impedance_ctrl_woutMass()
+    print("PD Impedance started")

@@ -14,9 +14,10 @@ import sys, os
 
 
 from os.path import dirname, join, abspath
-from spring_damper_jointspace import Spring_damper_jointspace
-from DLR_impedance_cartesian import DLR_Impedance_Cartesian
-from PD_impedance_jointspace import PD_Impedance_ctrl_woutMass
+from Spring_damper_jointspace import spring_damper_jointspace
+from DLR_impedance_cartesian import dlr_impedance_cartesian
+from PD_impedance_jointspace import pd_impedance_jointspace
+from PD_impedance_cartesian import pd_impedance_cartesian
 from scipy.spatial.transform import Rotation as R
 
 import intera_interface
@@ -36,7 +37,7 @@ class controller():
         rospy.set_param("control_node/control_flag", False)
         rospy.set_param("control_node/joint_angle_desi", [-0.1558798828125, 0.1269013671875, -1.63815625, 1.5093447265625, -1.41862890625, 1.5380302734375, -1.40465625])
         rospy.set_param("control_node/joint_velocity_desi", [0, 0, 0, 0, 0, 0, 0])
-        rospy.set_param("control_node/controllerstate", 2)
+        rospy.set_param("control_node/controllerstate", 3)
         self.Kd = rospy.set_param("control_node/Kd", [20])
         self.Dd = rospy.set_param("control_node/Dd", [1])
         self.lowpass_coeff = rospy.get_param("control_node/Lowpass_weight", 0.7)
@@ -50,9 +51,12 @@ class controller():
         self._missed_cmd = 20 # Missed cycles before triggering timeout
         
         # Instance Controller
-        self.impedance_ctrl_simple = Spring_damper_jointspace()
-        self.DLR_Impedance_Cartesian = DLR_Impedance_Cartesian()
-        self.PD_impedance_ctrl_cart_woutMass  = PD_Impedance_ctrl_woutMass()
+        self.DLR_Impedance_Cartesian = dlr_impedance_cartesian()
+        self.PD_impedance_cartesian = pd_impedance_cartesian()
+
+        self.impedance_ctrl_simple = spring_damper_jointspace()
+        self.PD_impedance_jointspace  = pd_impedance_jointspace()
+        
 
         # create limb instance
         self._limb = intera_interface.Limb(limb)
@@ -67,12 +71,13 @@ class controller():
         self._pub_gc_disable = rospy.Publisher(gc_ns, Empty, queue_size=1)
         
         ### Debug Publisher ###
-        self._pub_error = rospy.Publisher('EE_Pose_Error', JointState, queue_size=1)
+        self._pub_error = rospy.Publisher('/control_node_debug/EE_Pose_Error', JointState, queue_size=1)
+        self._pub_joint_velocity = rospy.Publisher('/control_node_debug/joint_velocity', JointState, queue_size=1)
 
         ########## Robot initialisation ##########
         # Instance Robotic Chain
         # TODO add relativ path
-        urdf_filepath = "/home/airlab5/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro"
+        urdf_filepath = "/home/nilssichert/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro"
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()
@@ -519,24 +524,22 @@ class controller():
         TODO clear names of controller
         """
         
-        if statecondition == 1: # State 1: Cartesian impedance control (Source DLR: Alin Albu-Schäffer )
+        if statecondition == 1: # State 1: DLR impedance controller - cartesian space (Source DLR: Alin Albu-Schäffer )
             Kd = Kd[:6,:6]
             motor_torque = self.DLR_Impedance_Cartesian.calc_joint_torque(Kd, ddx, cur_joint_angle, cur_joint_velocity, err_pose_cart, err_vel_cart, inertia, coriolis, jacobian, djacobian, gravity, sampling_time)
             return motor_torque
         
-        elif statecondition == 2: # State 2: Imedance Controller simple
-        
-            # Kd = np.diag([10,10,10,10,10,10,10])
-            # Dd = np.diag([1,1,1,1,1,1,1])
-            joint_angle_desi = rospy.get_param("control_node/joint_angle_desi")
-            motor_torque = self.impedance_ctrl_simple.calc_torque(joint_angle_desi, cur_joint_angle, cur_joint_velocity,Kd,Dd, gravity)
+        elif statecondition == 2: # State 2: PD impedance controller - cartesian space 
+            Kd = Kd[:6,:6]
+            motor_torque = self.PD_impedance_cartesian.calc_joint_torque()
+            return motor_torque
 
+        elif statecondition == 3: # State 3: Spring/Damper impedance controller - jointspace
+            motor_torque = self.impedance_ctrl_simple.calc_joint_torque(joint_angle_error, joint_velocity_error, Kd, Dd, gravity)
             return motor_torque
         
-        elif statecondition == 3: # State 3: PD impedance Controller
-            joint_angle_desi = rospy.get_param("control_node/joint_angle_desi")
-            # Kd = np.diag([50,50,50,50,50,50,50])
-            motor_torque = self.PD_impedance_ctrl_cart_woutMass.calc_joint_torque(jacobian, gravity, Kd, Dd, err_pose_cart, err_vel_cart, coriolis, joint_angle_desi, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error)
+        elif statecondition == 4: # State 4: PD impedance Controller - jointspace
+            motor_torque = self.PD_impedance_jointspace.calc_joint_torque(joint_angle_error, joint_velocity_error, Kd, Dd, coriolis, gravity, cur_joint_velocity)
             return motor_torque
         
         else:
@@ -596,7 +599,8 @@ class controller():
                 self._pub_cuff_disable.publish()
                 self._pub_gc_disable.publish()
                 self.publish_error(err_pose_cart, err_vel_cart, self._pub_error)
-                
+                self.publish_error(joint_velocity_error, cur_joint_velocity,self._pub_joint_velocity)
+
                 ### Transfer controller output in msg format dictionary
                 
                 torque_motor_dict = self.list2dictionary(self.clip_joints_effort_safe((torque_motor)))

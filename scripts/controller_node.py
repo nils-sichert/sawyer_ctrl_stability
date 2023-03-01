@@ -624,7 +624,7 @@ if __name__ == "__main__":
 
 ####### Gazebo apply force of 100N for Time of 5 sec on endeffector ########
 '''
-rosservice call /gazebo/apply_body_wrench "body_name: 'sawyer::right_l6'
+rosservice call /gazebo/apply_body_wrench "body_name: 'sawyer::right_l6' 1T 
 reference_frame: 'sawyer::base'
 reference_point: {x: 0.0, y: 0.0, z: 0.0}
 wrench:

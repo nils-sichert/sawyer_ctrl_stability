@@ -18,9 +18,6 @@ class PD_Impedance_ctrl_woutMass():
         Ouput: motor torque for each joint motor dim: list (motor_torque)
         '''
 
-        tmp = rospy.get_param("/Dd")
-        Dd = np.diag([tmp, tmp, tmp, tmp, tmp, tmp, tmp])
-
         # Desired Torque
         torque_list = np.zeros((len(joint_angle_error),1))
 

@@ -34,7 +34,7 @@ class controller():
         print("Initializing node...")
         rospy.init_node('Passiv_Activ_Controller', anonymous=True)
         rospy.set_param("control_node/control_flag", False)
-        rospy.set_param("control_node/joint_angle_desi", [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981])
+        rospy.set_param("control_node/joint_angle_desi", [-0.1558798828125, 0.1269013671875, -1.63815625, 1.5093447265625, -1.41862890625, 1.5380302734375, -1.40465625])
         rospy.set_param("control_node/joint_velocity_desi", [0, 0, 0, 0, 0, 0, 0])
         rospy.set_param("control_node/controllerstate", 2)
         self.Kd = rospy.set_param("control_node/Kd", [20])
@@ -43,7 +43,7 @@ class controller():
         self.lock = threading.RLock()
 
         # set neutral pose of sawyer
-        rospy.set_param("named_poses/right/poses/neutral", [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981])
+        rospy.set_param("named_poses/right/poses/neutral", [-0.1558798828125, 0.1269013671875, -1.63815625, 1.5093447265625, -1.41862890625, 1.5380302734375, -1.40465625])
 
         # control parameters
         self.rate = 100 # Controlrate - 100Hz
@@ -72,7 +72,7 @@ class controller():
         ########## Robot initialisation ##########
         # Instance Robotic Chain
         # TODO add relativ path
-        urdf_filepath = "/home/nilssichert/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro"
+        urdf_filepath = "/home/airlab5/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro"
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()

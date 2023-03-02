@@ -73,9 +73,9 @@ Either put in one value which will be taken as values for all diagonal values or
 Order of entries: [Base -> Endeffector]
 ```bash
   rosparam set /control_node/Kd [100]
-  rosparam set /control_node/Kd [100, 80, 60, 40, 20, 10, 10]
+  rosparam set /control_node/Kd [100,80,60,40,20,10,10]
   
-  rosparam set /control_node/Dd [100]
-  rosparam set /control_node/Dd [100, 80, 60, 40, 20, 10, 10]
+  rosparam set /control_node/Dd [1]
+  rosparam set /control_node/Dd [1,1,1,1,1,1,1]
 ```
 

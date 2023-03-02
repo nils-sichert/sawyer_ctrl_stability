@@ -69,8 +69,8 @@ Velocity:
 
 ### Set joint stifness or joint damping, creates diagonal matrix from value - default: [20] 
 has to be >=0\
-Either put in one value which will be taken as values for all diagonal values or put in a list of 7 (7 joints) values.
-
+Either put in one value which will be taken as values for all diagonal values or put in a list of 7 (7 joints) values.\
+Order of entries: [Base -> Endeffector]
 ```bash
   rosparam set /control_node/Kd [100]
   rosparam set /control_node/Kd [100, 80, 60, 40, 20, 10, 10]

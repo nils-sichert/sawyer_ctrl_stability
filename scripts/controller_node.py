@@ -77,7 +77,7 @@ class controller():
         ########## Robot initialisation ##########
         # Instance Robotic Chain
         # TODO add relativ path
-        urdf_filepath = os.path.join(os.getcwd(), 'src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro')
+        urdf_filepath = os.path.abspath(os.path.join(os.path.abspath(__file__), os.pardir, os.pardir, os.pardir, 'sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'))
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()
@@ -552,9 +552,6 @@ class controller():
         Parameters: None
         Return: motor torques (dict: 7x1)
         """
-        # timeout = 4 # @type timeout: float / @param timeout: seconds to wait for move to finish [15]
-        # speed = 0.2 # @type speed: float / @param speed: ratio of maximum joint speed for execution default= 0.3; range= [0.0-1.0]
-        # self._limb.move_to_neutral(timeout, speed)
         pos_vec, rot_mat, pose = self.calc_pose(type='positions')
         
         # Set limb controller timeout to return to Sawyer position controller

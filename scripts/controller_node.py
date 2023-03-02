@@ -146,11 +146,20 @@ class controller():
         """
         old_Kd = self.Kd
         tmp = rospy.get_param("control_node/Kd")
-        if len(tmp)==7:
-            self.Kd = np.diag(tmp)
+        if type(tmp) is list:
+            if len(tmp)==7:
+                tmp_list = [0,1,2,3,4,5,6]
+                for i in range(len(tmp)):
+                    tmp_list[i] = tmp[i]
+                self.Kd = np.diag(tmp)
+            elif len(tmp)==1:
+                tmp = tmp[0]
+                self.Kd = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
+            else:
+                print('[Update KD]: Wrong input format. Update of Kd is not executed')
         else:
-            tmp = tmp[0]
-            self.Kd = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
+                print('[Update KD]: Wrong input format. Update of Kd is not executed')
+
         if not np.array_equal(old_Kd, self.Kd):
             print('New Stiffness was choosen: ', self.Kd)
         return self.Kd
@@ -163,11 +172,20 @@ class controller():
         """
         old_Dd = self.Dd
         tmp = rospy.get_param("control_node/Dd")
-        if len(tmp) == 7:
-            self.Dd = np.diag(tmp)
+        if type(tmp) is list:
+            if len(tmp)==7:
+                tmp_list = [0,1,2,3,4,5,6]
+                for i in range(len(tmp)):
+                    tmp_list[i] = tmp[i]
+                self.Dd = np.diag(tmp)
+            elif len(tmp)==1:
+                tmp = tmp[0]
+                self.Dd = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
+            else:
+                print('[Update Dd]: Wrong input format. Update of Dd is not executed')
         else:
-            tmp = tmp[0]
-            self.Dd = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
+                print('[Update Dd]: Wrong input format. Update of Dd is not executed')
+
         if not np.array_equal(old_Dd, self.Dd):
             print('New Damping was choosen: ', self.Dd)
         return self.Dd
@@ -314,7 +332,16 @@ class controller():
         print("\nExiting Control node...")
         self._limb.exit_control_mode()
 
-    ############ Robot safety methods ############ 
+    ############ Robot safety and watcher methods ############ 
+
+    def handler_torque_jumps(self, motor_torque):
+        return motor_torque
+    
+    def watchdog_joint_limits(self, motor_torque):
+        return motor_torque
+    
+    def watchdog_oscillation(self):
+        pass
 
     def joints_in_limits(self, q):
         """
@@ -504,6 +531,9 @@ class controller():
         Return: statecondition (int)
         """
         statecondition = rospy.get_param("control_node/controllerstate")
+        if statecondition != 3 and statecondition != 4:
+            statecondition = 3
+            rospy.set_param("control_node/controllerstate", 3)
         return statecondition
     
     def set_initalstate(self, current_joint_angle):
@@ -592,6 +622,13 @@ class controller():
                 ### Calculate motor torque for each joint motor
                 torque_motor = self.run_statemachine(statecondition, cur_joint_angle, cur_joint_velocity, err_pose_cart, err_vel_cart, joint_angle_error, joint_velocity_error, ddx, Kd, Dd, periodTime, coriolis, inertia, gravity, jacobian, djacobian)
                 
+                ### Safety Watchdogs
+                torque_motor = self.handler_torque_jumps(torque_motor)
+                torque_motor = self.watchdog_joint_limits(torque_motor)
+
+                ### Oszillation safety
+                self.watchdog_oscillation()
+
                 ### Disable cuff and gravitation compensation and publish debug values
                 self._pub_cuff_disable.publish()
                 self._pub_gc_disable.publish()

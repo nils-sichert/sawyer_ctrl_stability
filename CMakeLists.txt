@@ -164,7 +164,7 @@ catkin_install_python(PROGRAMS
   scripts/controller_node.py
   scripts/DLR_impedance_cartesian.py
   scripts/PD_impedance_jointspace.py
-  scripts/spring_damper_jointspace.py
+  scripts/Spring_damper_jointspace.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 

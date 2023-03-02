@@ -36,11 +36,11 @@ Install necessary packages:
 if stop robot will return to default position controller\
 Start:
 ```bash
-  rosparam set control_node/control_flag True
+  rosparam set /control_node/control_flag True
 ```
 Stop:
 ```bash
-  rosparam set control_node/control_flag False
+  rosparam set /control_node/control_flag False
 ```
 ### Set neutral pose of robot:
 ```bash
@@ -50,26 +50,32 @@ Stop:
 ### Set desired joint angle (rad) and joint velocity (rad/s):
 Angle:
 ```bash
-  rosparam set control_node/joint_angle_desi [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981]
+  rosparam set /control_node/joint_angle_desi [-2.3588, -0.0833594, -1.625, -2.2693, -2.98359, -0.234008,  0.10981]
 ```
 Velocity:
 ```bash
-  rosparam set control_node/joint_velocity_desi [0, 0, 0, 0, 0, 0, 0]
+  rosparam set /control_node/joint_velocity_desi [0, 0, 0, 0, 0, 0, 0]
 ```
 
-### Set control algorithm - default: 2 
-1: DLR Alin Albu-Schäffer Cartesian impedance control\
-2: Simple Spring-Damper impedance control\
-3: PD impedance control
+### Set control algorithm - default: 3 
+1: DLR Alin Albu-Schäffer Cartesian impedance control - not working!\
+2: PD impedance control cartesian space - not working!\
+3: Simple Spring-Damper impedance control - working (default)\
+4: PD impedance control jointspace - working
 
 ```bash
-  rosparam set control_node/controllerstate 2
+  rosparam set /control_node/controllerstate 3
 ```
 
-### Set joint stifness, creates diagonal matrix from value - default: 100 
-has to be >=0
-
+### Set joint stifness or joint damping, creates diagonal matrix from value - default: [20] 
+has to be >=0\
+Either put in one value which will be taken as values for all diagonal values or put in a list of 7 (7 joints) values.\
+Order of entries: [Base -> Endeffector]
 ```bash
-  rosparam set control_node/Kd 100
+  rosparam set /control_node/Kd [100]
+  rosparam set /control_node/Kd [100, 80, 60, 40, 20, 10, 10]
+  
+  rosparam set /control_node/Dd [100]
+  rosparam set /control_node/Dd [100, 80, 60, 40, 20, 10, 10]
 ```
 

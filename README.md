@@ -60,17 +60,22 @@ Velocity:
 ### Set control algorithm - default: 3 
 1: DLR Alin Albu-Schäffer Cartesian impedance control - not working!\
 2: PD impedance control cartesian space - not working!
-2: Simple Spring-Damper impedance control - working (default)\
-3: PD impedance control jointspace - working
+3: Simple Spring-Damper impedance control - working (default)\
+4: PD impedance control jointspace - working
 
 ```bash
   rosparam set /control_node/controllerstate 3
 ```
 
-### Set joint stifness, creates diagonal matrix from value - default: 100 
+### Set joint stifness or joint damping, creates diagonal matrix from value - default: [20] 
 has to be >=0
+Either put in one value which will be taken as values for all diagonal values or put in a list of 7 (7 joints) values.
 
 ```bash
-  rosparam set /control_node/Kd 100
+  rosparam set /control_node/Kd [100]
+  rosparam set /control_node/Kd [100, 80, 60, 40, 20, 10, 10]
+  
+  rosparam set /control_node/Dd [100]
+  rosparam set /control_node/Dd [100, 80, 60, 40, 20, 10, 10]
 ```
 

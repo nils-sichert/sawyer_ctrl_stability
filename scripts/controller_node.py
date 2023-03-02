@@ -77,7 +77,7 @@ class controller():
         ########## Robot initialisation ##########
         # Instance Robotic Chain
         # TODO add relativ path
-        urdf_filepath = "/home/nilssichert/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro"
+        urdf_filepath = os.path.join(os.getcwd(), 'src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro')
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()
@@ -539,9 +539,9 @@ class controller():
             return motor_torque
         
         elif statecondition == 4: # State 4: PD impedance Controller - jointspace
-            motor_torque = self.PD_impedance_jointspace.calc_joint_torque(joint_angle_error, joint_velocity_error, Kd, Dd, coriolis, gravity, cur_joint_velocity)
+            motor_torque = self.PD_impedance_jointspace.calc_joint_torque(gravity, Kd, Dd, coriolis, joint_angle_error, joint_velocity_error)
             return motor_torque
-        
+                                                                            
         else:
             print('State does not exists. Exiting...')
             pass
@@ -552,9 +552,9 @@ class controller():
         Parameters: None
         Return: motor torques (dict: 7x1)
         """
-        timeout = 4 # @type timeout: float / @param timeout: seconds to wait for move to finish [15]
-        speed = 0.2 # @type speed: float / @param speed: ratio of maximum joint speed for execution default= 0.3; range= [0.0-1.0]
-        self._limb.move_to_neutral(timeout, speed)
+        # timeout = 4 # @type timeout: float / @param timeout: seconds to wait for move to finish [15]
+        # speed = 0.2 # @type speed: float / @param speed: ratio of maximum joint speed for execution default= 0.3; range= [0.0-1.0]
+        # self._limb.move_to_neutral(timeout, speed)
         pos_vec, rot_mat, pose = self.calc_pose(type='positions')
         
         # Set limb controller timeout to return to Sawyer position controller
@@ -579,7 +579,7 @@ class controller():
                 inertia = np.atleast_2d(self.calc_inertia())    # numpy 7x7 
                 gravity = np.atleast_2d(self.calc_gravity()).T  # numpy 7x1 
                 jacobian = np.atleast_2d(self.calc_jacobian())  # numpy 6x7 
-                coriolis = np.atleast_2d(self.calc_coriolis()).T # numpy 7x7 
+                coriolis = np.atleast_2d(self.calc_coriolis()).T # numpy 7x1
 
                 ### get current Joint-angle, -velocity and -effort
                 cur_joint_angle = np.atleast_2d(self.dictionary2list(self._limb.joint_angles())).T          # numpy 7x1

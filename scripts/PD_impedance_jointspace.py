@@ -9,7 +9,7 @@ class pd_impedance_jointspace():
     def __init__(self):
         pass
 
-    def calc_joint_torque(self, gravity_compensation, Kd, Dd, coriolis_compensation, error_joint_angles, error_joint_velocity, current_joint_velocity):
+    def calc_joint_torque(self, gravity_compensation, Kd, Dd, coriolis_compensation, error_joint_angles, error_joint_velocity):
         '''
         Calculate torques based on displacement from target position, current velocity and includes gravity and coriolis compensation.
         Parameter: Jacobian dim:6x7 (J), gravity torque dim:7x1 (g), stiffness matrix dim:6x6 (Kd), joint_angle dim:7x1 (q),
@@ -23,7 +23,7 @@ class pd_impedance_jointspace():
 
 
         for joint in range(len(error_joint_angles)):
-            torque_list[joint] =  -Kd[joint][joint] * (error_joint_angles[joint]) - Dd[joint][joint] * error_joint_velocity[joint]+ gravity_compensation[joint] + coriolis_compensation[joint] * current_joint_velocity[joint]
+            torque_list[joint] =  -Kd[joint][joint] * (error_joint_angles[joint]) - Dd[joint][joint] * error_joint_velocity[joint]+ gravity_compensation[joint] + coriolis_compensation[joint]
         return self.vec2list(torque_list)
     
     def vec2list(self,vec):

@@ -59,7 +59,7 @@ Velocity:
 
 ### Set control algorithm - default: 3 
 1: DLR Alin Albu-Schäffer Cartesian impedance control - not working!\
-2: PD impedance control cartesian space - not working!
+2: PD impedance control cartesian space - not working!\
 3: Simple Spring-Damper impedance control - working (default)\
 4: PD impedance control jointspace - working
 
@@ -68,7 +68,7 @@ Velocity:
 ```
 
 ### Set joint stifness or joint damping, creates diagonal matrix from value - default: [20] 
-has to be >=0
+has to be >=0\
 Either put in one value which will be taken as values for all diagonal values or put in a list of 7 (7 joints) values.
 
 ```bash

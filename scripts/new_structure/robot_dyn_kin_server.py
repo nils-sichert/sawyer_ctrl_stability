@@ -1,0 +1,336 @@
+#!/usr/bin/env python3
+
+import rospy
+import numpy as np
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Empty
+from intera_core_msgs.msg import JointLimits, SEAJointState
+import PyKDL as kdl
+import copy
+from kdl_parser_py import urdf
+import sys, os
+
+from scipy.spatial.transform import Rotation as R
+
+import intera_interface
+from intera_interface import CHECK_VERSION
+
+class Robot_dynamic_kinematic_server():
+
+    def __init__(self, limb):
+        print("Initializing Robot dynamic and kinematic server")
+        #TODO ROS_SET: passed as default option when init class
+        rospy.init_node('Robot_dyn_kin_server', anonymous=True)        
+
+        # create limb instance
+        self._limb = intera_interface.Limb(limb)
+    
+        ########## Robot initialisation ##########
+        # Instance Robotic Chain
+        # TODO Put in seperate script dyn/kin in script (robot_dyn_kin.py)
+        # urdf_filepath = os.path.abspath(os.path.join(os.path.abspath(__file__), os.pardir, os.pardir, os.pardir, 'sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'))
+        urdf_filepath = '/home/nilssichert/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'
+        (ok, robot) = urdf.treeFromFile(urdf_filepath)
+        self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
+        self._nrOfJoints = self._robot_chain.getNrOfJoints()
+        self._jac_kdl = kdl.ChainJntToJacSolver(self._robot_chain)
+        self.grav_vector = kdl.Vector(0, 0, -9.81)
+        self.FKSolver = kdl.ChainFkSolverPos_recursive(self._robot_chain)
+        self.dyn_kdl = kdl.ChainDynParam(self._robot_chain, self.grav_vector)
+        self._joint_names = self._limb.joint_names()
+        
+      
+        # verify robot is enabled
+        print("Getting robot state... ")
+        self._rs = intera_interface.RobotEnable(CHECK_VERSION)
+        self._init_state = self._rs.state().enabled
+        print("Enabling robot... ")
+        self._rs.enable()
+        print("Running. Ctrl-c to quit")
+
+        # Robot limit and safety
+        # TODO limit subscriber /robot/joint_limits
+        limit = 100
+        self.joint_efforts_safety_lower = [-limit,-limit,-limit,-limit,-limit,-limit,-limit]
+        self.joint_efforts_safety_upper = [limit,limit,limit,limit,limit,limit,limit]
+
+        # Instance state varibles
+        self.jacobian = np.zeros((6,7))
+        self.jacobian_prev = np.zeros((6,7))
+        self.djacobian = np.zeros((6,7))
+        self.periodTime = 0.01
+
+        # control parameters
+        self.rate = 100 # Controlrate - 100Hz
+        self._missed_cmd = 20 # Missed cycles before triggering timeout
+
+        # Set limb controller timeout to return to Sawyer position controller
+        self._limb.set_command_timeout((1.0 / self.rate) * self._missed_cmd)
+        
+    def clean_shutdown(self):
+        """
+        Clean exit of controller node
+        """
+        print("\nExiting Control node...")
+        self._limb.exit_control_mode()
+
+    def calc_pose_cartesianSpace(self, type, joint_values = None, link_number = 7):
+        """
+        Calculation of position or velocities (depending on the parameter type) with forward kinematis. 
+        It can calculate the FK for given joint_values. If no are given, the methods takes the actual values 
+        of the Robot. The link number can be choosen to calculate the FK for the given link.
+        Parameters: type (str), joint_values (7x1), link_number (int)
+        Return: pos_vec (3x1), rot_mat (3x3), pose (6x1)
+        """
+        endeffec_frame = kdl.Frame()
+        if type == 'positions':
+            kinematics_status = self.FKSolver.JntToCart(self.joints_to_kdl('positions',joint_values),
+                                                   endeffec_frame,
+                                                   link_number)
+        elif type == 'velocities':
+            kinematics_status = self.FKSolver.JntToCart(self.joints_to_kdl('velocities',joint_values),
+                                                   endeffec_frame,
+                                                   link_number)
+        else:
+            print('Err: [Calc_pose] Wrong type choosen.')
+
+        if kinematics_status >= 0:
+            p = endeffec_frame.p
+            pos_vec = [p.x(),p.y(),p.z()]
+            M = endeffec_frame.M
+            rot_mat = np.mat([[M[0,0], M[0,1], M[0,2]],
+                            [M[1,0], M[1,1], M[1,2]], 
+                            [M[2,0], M[2,1], M[2,2]]])
+            r = R.from_matrix(rot_mat)
+            rot_vec = r.as_rotvec()
+            pose = [0]*6
+            for i in range(3):
+                pose[i]= pos_vec[i]
+                pose[i+3] = rot_vec[i]
+
+            return pos_vec, rot_mat, pose
+                            
+        else:
+            return None
+    
+    def calc_coriolis(self, joint_angles=None, joint_velocities=None):
+        """
+        Calculation of coriolis compensation torques based on the joint angles and velocities.
+        Parameters: joint angles (7x1), joint velocites (7x1)
+        Return: coriolis torques - C*q_dot (7x1)
+        """
+        coriolis_torques = kdl.JntArray(self._nrOfJoints)
+        self.dyn_kdl.JntToCoriolis(self.joints_to_kdl('positions',joint_angles), self.joints_to_kdl('velocities',joint_velocities), coriolis_torques)	# C(q, q_dot)
+        return np.atleast_2d(self.array_kdl_to_list(coriolis_torques))
+
+    def calc_inertia(self, joint_values=None):
+        """
+        Calculation of intertia matrix based on the joint_angle.
+        Parameters: joint angles (7x1)
+        Return: inertia matrix (7x7)
+        """
+        inertia = kdl.JntSpaceInertiaMatrix(self._nrOfJoints)
+        self.dyn_kdl.JntToMass(self.joints_to_kdl('positions',joint_values), inertia)
+        return np.atleast_2d(self.kdl_to_mat(inertia))
+
+    def calc_gravity(self, joint_values=None):
+        """
+        Calculation of gravity compensation torques based on the joint values.
+        Parameters: joint angles (7x1)
+        Return: gravity torques (7x1)
+        """
+        grav_torques = kdl.JntArray(self._nrOfJoints)
+        self.dyn_kdl.JntToGravity(self.joints_to_kdl('positions',joint_values), grav_torques)
+        return np.atleast_2d(self.array_kdl_to_list(grav_torques))
+
+    def calc_jacobian(self,joint_values=None):
+        """
+        Calculation of jacobian matrix mased on joint angles.
+        Parameters: joint angles (7x1)
+        Return: jacobian (6x7)
+        """
+        self.jacobian_prev = self.jacobian
+        jacobian = kdl.Jacobian(self._nrOfJoints)
+        self._jac_kdl.JntToJac(self.joints_to_kdl('positions',joint_values), jacobian)
+        self.jacobian = self.kdl_to_mat(jacobian)
+        return np.atleast_2d(self.jacobian)
+
+    def calc_djacobian(self):
+        """
+        Calculates first derivative of jacobian.
+        Parameters: joacobian (6x7), previous jacobian (6x7), period Time (sec)
+        Return: djacobian (6x7)
+        """
+        self.djacobian = np.atleast_2d((self.get_jacobian()-self.get_jacobian_prev())/self.get_periodTime())
+        return 
+
+
+   ############ Format converter (KDL/Numpy, List/Dict) ############ 
+    
+    def kdl_to_mat(self, m):
+        """
+        Transform KDL matrix into numpy matrix format.
+        Parameters: KDL matrix (nxm)
+        Return: numpy array (nxm)
+        """
+        mat =  np.mat(np.zeros((m.rows(), m.columns())))
+        for i in range(m.rows()):
+            for j in range(m.columns()):
+                mat[i,j] = m[i,j]
+        return mat
+
+    def joints_to_kdl(self, type, values=None):
+        """
+        Transform array into KDL array. If no value given type of joint value is taken into account.
+        Parameters: array (nx1)
+        Return: KDL array (nx1)
+        TODO Errorhandling
+        """
+
+        kdl_array = kdl.JntArray(self._nrOfJoints)
+    
+        if values is None:
+            if type == 'positions':
+                cur_type_values = self._limb.joint_angles()
+            elif type == 'velocities':
+                cur_type_values = self._limb.joint_velocities()
+            elif type == 'torques':
+                cur_type_values = self._limb.joint_efforts()
+        else:
+            cur_type_values = values
+        
+        for idx, name in enumerate(self._joint_names):
+            kdl_array[idx] = cur_type_values[name]
+        return kdl_array
+    
+    def array_kdl_to_list(self, q):
+        """
+        Transform KDL array into list.
+        Parameters: array (nx1)
+        Return: list (nx1)
+        """
+        if q == None:
+            return None
+        return [q[i] for i in range(q.rows())]
+
+    def dictionary2list(self, dic):  
+        """
+        Transform dictionary into list.
+        Parameters: dictionary
+        Return: list
+        """
+        list_tmp = []
+        for key, value in dic.items():
+            list_tmp.append(value)
+        return list_tmp
+    
+    def list2dictionary(self, list):
+        """
+        Transform list into dictionary.
+        Parameters: list
+        Return: dictionary
+        """
+        new_limb_torque = {}
+        i = 0
+        for joint in self._limb.joint_names():
+            new_limb_torque[joint] = list[i]
+            i += 1
+        return new_limb_torque
+
+    def move2position(self, position):
+        pass #TODO add method
+
+    
+    ############ Getter methods ############ 
+
+ 
+    def get_jacobian_prev(self):
+        """
+        Gets previous jacobian matrix.
+        Parameters: None
+        Return: jacobian matrix (6x7)
+        """
+        return copy.deepcopy(self.jacobian_prev)
+
+    def get_djacobian(self):
+        return copy.deepcopy(self.djacobian)
+    
+    def get_jacobian(self):
+        return copy.deepcopy(self.jacobian)
+
+    def get_coriolis(self):
+        return self.calc_coriolis()
+
+    def get_inertia(self):
+        return self.calc_inertia()
+
+    def get_gravity_compensation(self):
+        return self.calc_gravity()
+
+    def get_current_positions_cartesianSpace(self, type='positions'):
+        return self.calc_pose_cartesianSpace(type)
+    
+    def get_current_velocities_cartesianSpace(self, type='velocities'):
+        return self.calc_pose_cartesianSpace(type)
+
+    def get_current_joint_angles(self):
+        return np.atleast_2d(self.dictionary2list(self._limb.joint_angles())).T   
+    
+    def get_current_joint_velocities(self):
+        return np.atleast_2d(self.dictionary2list(self._limb.joint_velocities())).T  
+
+    def get_periodTime(self):
+        return copy.deepcopy(self.periodTime)
+    
+    def get_current_DisplayAngle(self):
+        pass #TODO
+
+    def get_joint_limits(self):
+        pass #TODO
+
+    def get_torque_limits(self):
+        pass #TODO
+
+    ############ Update methods ############
+
+    def update_periodTime(self, periodTime):
+        self.periodTime = periodTime
+
+    def update_robot_states(self, periodTime):
+        self.update_periodTime(periodTime)
+        self.calc_jacobian()
+        self.calc_djacobian()
+
+    ############ Setter methods ############
+
+    def set_joint_torques(self, torques):
+        self._limb.set_joint_torques(torques)
+    
+    def set_DispalyAngle(self, jointangle):
+        pass #TODO implement display angle
+  
+   
+  
+def main():
+    robot_dyn_kin_server = Robot_dynamic_kinematic_server()
+    robot_dyn_kin_server.update_robot_states()
+    print(robot_dyn_kin_server.get_djacobian())
+    print(robot_dyn_kin_server.get_jacobian())
+    print(robot_dyn_kin_server.get_jacobian_prev())
+    print(robot_dyn_kin_server.get_coriolis())
+    print(robot_dyn_kin_server.get_inertia())
+    print(robot_dyn_kin_server.get_gravity_compensation())
+    print(robot_dyn_kin_server.get_current_joint_angles())
+    print(robot_dyn_kin_server.get_current_joint_velocities())
+    print(robot_dyn_kin_server.get_current_positions_cartesianSpace())
+    print(robot_dyn_kin_server.get_current_velocities_cartesianSpace())
+    
+
+if __name__ == "__main__":
+    try: 
+        main()
+    except rospy.ROSInterruptException:
+        pass
+
+
+    

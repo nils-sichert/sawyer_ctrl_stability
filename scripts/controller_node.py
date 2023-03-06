@@ -27,12 +27,17 @@ from intera_interface import CHECK_VERSION
 Please add Bugs and Todos here:
 TODO easier handle of controller positions
 TODO each controller hold position while changing controller (same setpoints)
-
+TODO add method to move to neutral
+TODO suppres collision avoidance
+TODO joint angles 8x1 inlc. head
+ctrl.move2neutral(neutral pose)
+move2neutral(self, neutral_pose=rospy.get_param...)
 """
 
 class controller():
-    def __init__(self, limb = "right"):
+    def __init__(self, limb = "right", neutral_pose = [-0.1558798828125, 0.1269013671875, -1.63815625, 1.5093447265625, -1.41862890625, 1.5380302734375, -1.40465625]):
         print("Initializing node...")
+        #TODO ROS_SET: passed as default option when init class
         rospy.init_node('Passiv_Activ_Controller', anonymous=True)
         rospy.set_param("control_node/control_flag", False)
         rospy.set_param("control_node/joint_angle_desi", [-0.1558798828125, 0.1269013671875, -1.63815625, 1.5093447265625, -1.41862890625, 1.5380302734375, -1.40465625])
@@ -44,7 +49,7 @@ class controller():
         self.lock = threading.RLock()
 
         # set neutral pose of sawyer
-        rospy.set_param("named_poses/right/poses/neutral", [-0.1558798828125, 0.1269013671875, -1.63815625, 1.5093447265625, -1.41862890625, 1.5380302734375, -1.40465625])
+        rospy.set_param("named_poses/right/poses/neutral", neutral_pose )
 
         # control parameters
         self.rate = 100 # Controlrate - 100Hz
@@ -76,7 +81,7 @@ class controller():
 
         ########## Robot initialisation ##########
         # Instance Robotic Chain
-        # TODO add relativ path
+        # TODO Put in seperate script dyn/kin in script (robot_dyn_kin.py)
         urdf_filepath = os.path.abspath(os.path.join(os.path.abspath(__file__), os.pardir, os.pardir, os.pardir, 'sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'))
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
@@ -96,6 +101,7 @@ class controller():
         print("Running. Ctrl-c to quit")
 
         # Robot limit and safety
+        # TODO limit subscriber /robot/joint_limits
         limit = 100
         self.joint_efforts_safety_lower = [-limit,-limit,-limit,-limit,-limit,-limit,-limit]
         self.joint_efforts_safety_upper = [limit,limit,limit,limit,limit,limit,limit]
@@ -630,6 +636,7 @@ class controller():
                 self.watchdog_oscillation()
 
                 ### Disable cuff and gravitation compensation and publish debug values
+                # TODO cuff disable/ enable by default / maybe FLAG script
                 self._pub_cuff_disable.publish()
                 self._pub_gc_disable.publish()
                 self.publish_error(err_pose_cart, err_vel_cart, self._pub_error)

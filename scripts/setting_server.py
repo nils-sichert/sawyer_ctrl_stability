@@ -2,8 +2,8 @@
 import rospy
 
 class Setting_server():
-    def __init__(self, ControlStartStop, joint_angle_desired, joint_velocity_desired, statemachine_condition,joint_stiffness, joint_damping, neutral_pose):
-        rospy.init_node('control_node_setting', anonymous=True)
+    def __init__(self, ControlStartStop, joint_angle_desired, joint_velocity_desired, statemachine_condition,joint_stiffness, joint_damping, neutral_pose, move2neutral):
+        # rospy.init_node('setting_server', anonymous=True)
 
         # Set inital parameters # 
 
@@ -15,6 +15,7 @@ class Setting_server():
         rospy.set_param("control_node/Dd", joint_damping)
         rospy.set_param("named_poses/right/poses/neutral", neutral_pose)
         rospy.set_param("control_node/Lowpass_coeff", 0.6)
+        rospy.set_param("control_node/move2neutral", move2neutral)
 
 
     ######## Getter Methods ########
@@ -42,6 +43,9 @@ class Setting_server():
     
     def get_lowpass_coeff(self):
         return rospy.get_param("control_node/Lowpass_coeff")
+    
+    def get_move2neutral(self):
+        return rospy.get_param("control_node/move2neutral")
 
 
     ######## Setter Methods ########
@@ -60,15 +64,18 @@ class Setting_server():
     
     def set_stiffness(self, joint_stiffness):
         return rospy.set_param("control_node/Kd", joint_stiffness)
-    
+        
     def set_damping(self, joint_damping):
         return rospy.set_param("control_node/Dd", joint_damping)
     
     def set_neutral_pose(self, neutral_pose):
         return rospy.set_param("named_poses/right/poses/neutral", neutral_pose)
     
-    def get_lowpass_coeff(self, coeff):
+    def set_lowpass_coeff(self, coeff):
         return rospy.get_param("control_node/Lowpass_coeff", coeff)
+
+    def set_move2neutral(self, Flag):
+        return rospy.set_param("control_node/move2neutral", Flag)
     
 def main():
     settings = Setting_server(ControlStartStop = False, joint_angle_desired = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40],

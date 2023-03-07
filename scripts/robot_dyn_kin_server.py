@@ -12,6 +12,7 @@ import sys, os
 
 from scipy.spatial.transform import Rotation as R
 
+
 import intera_interface
 from intera_interface import CHECK_VERSION
 
@@ -20,10 +21,12 @@ class Robot_dynamic_kinematic_server():
     def __init__(self, limb):
         print("Initializing Robot dynamic and kinematic server")
         #TODO ROS_SET: passed as default option when init class
-        rospy.init_node('Robot_dyn_kin_server', anonymous=True)        
+        # rospy.init_node('Robot_dyn_kin_server', anonymous=True)        
 
         # create limb instance
         self._limb = intera_interface.Limb(limb)
+        self._limits = intera_interface.JointLimits()
+        self._head = intera_interface.Head()
     
         ########## Robot initialisation ##########
         # Instance Robotic Chain
@@ -49,11 +52,15 @@ class Robot_dynamic_kinematic_server():
         print("Running. Ctrl-c to quit")
 
         # Robot limit and safety
-        # TODO limit subscriber /robot/joint_limits
-        limit = 100
-        self.joint_efforts_safety_lower = [-limit,-limit,-limit,-limit,-limit,-limit,-limit]
-        self.joint_efforts_safety_upper = [limit,limit,limit,limit,limit,limit,limit]
-
+        self.joint_angle_limit_upper = np.atleast_2d(np.array(self._limits.get_joint_upper_limits(self._joint_names)))
+        self.joint_anlge_limit_lower = np.atleast_2d(np.array(self._limits.get_joint_lower_limits(self._joint_names)))
+        self.joint_velocity_limits_upper =   np.atleast_2d(np.array(self._limits.get_joint_velocity_limits(self._joint_names)))
+        self.joint_velocity_limits_lower =  -np.atleast_2d(np.array(self._limits.get_joint_velocity_limits(self._joint_names)))
+        self.joint_acceleration_limits = np.atleast_2d(np.array(self._limits.get_joint_acceleration_limits(self._joint_names)))
+        self.joint_efforts_limit_upper = np.atleast_2d(np.array(self._limits.get_joint_effort_limits(self._joint_names)))
+        self.joint_efforts_limit_lower = - np.atleast_2d(np.array(self._limits.get_joint_effort_limits(self._joint_names)))
+        
+        
         # Instance state varibles
         self.jacobian = np.zeros((6,7))
         self.jacobian_prev = np.zeros((6,7))
@@ -62,7 +69,7 @@ class Robot_dynamic_kinematic_server():
 
         # control parameters
         self.rate = 100 # Controlrate - 100Hz
-        self._missed_cmd = 20 # Missed cycles before triggering timeout
+        self._missed_cmd = 5 # Missed cycles before triggering timeout
 
         # Set limb controller timeout to return to Sawyer position controller
         self._limb.set_command_timeout((1.0 / self.rate) * self._missed_cmd)
@@ -238,7 +245,12 @@ class Robot_dynamic_kinematic_server():
         return new_limb_torque
 
     def move2position(self, position):
-        pass #TODO add method
+        self._limb.move_to_joint_positions(position, timeout = 10)
+
+    def move2neutral(self):
+        self._limb.move_to_neutral(timeout = 3, speed = 0.3)
+
+    
 
     
     ############ Getter methods ############ 
@@ -259,13 +271,13 @@ class Robot_dynamic_kinematic_server():
         return copy.deepcopy(self.jacobian)
 
     def get_coriolis(self):
-        return self.calc_coriolis()
+        return self.calc_coriolis().T
 
     def get_inertia(self):
         return self.calc_inertia()
 
     def get_gravity_compensation(self):
-        return self.calc_gravity()
+        return self.calc_gravity().T
 
     def get_current_positions_cartesianSpace(self, type='positions'):
         return self.calc_pose_cartesianSpace(type)
@@ -276,6 +288,9 @@ class Robot_dynamic_kinematic_server():
     def get_current_joint_angles(self):
         return np.atleast_2d(self.dictionary2list(self._limb.joint_angles())).T   
     
+    def get_current_joint_angles_list(self):
+        return self.dictionary2list(self._limb.joint_angles())
+    
     def get_current_joint_velocities(self):
         return np.atleast_2d(self.dictionary2list(self._limb.joint_velocities())).T  
 
@@ -283,13 +298,26 @@ class Robot_dynamic_kinematic_server():
         return copy.deepcopy(self.periodTime)
     
     def get_current_DisplayAngle(self):
-        pass #TODO
-
+        return self._head.pan()
+    
     def get_joint_limits(self):
-        pass #TODO
+        upper_limit = copy.deepcopy(self.joint_angle_limit_upper)
+        lower_limit = copy.deepcopy(self.joint_anlge_limit_lower)
+        return upper_limit, lower_limit
 
     def get_torque_limits(self):
-        pass #TODO
+        upper_limit = copy.deepcopy(self.joint_efforts_limit_upper)
+        lower_limit = copy.deepcopy(self.joint_efforts_limit_lower)
+        return upper_limit, lower_limit
+    
+    def get_velocity_limits(self):
+        upper_limit = copy.deepcopy(self.joint_velocity_limits_upper)
+        lower_limit = copy.deepcopy(self.joint_velocity_limits_lower)
+        return upper_limit, lower_limit
+    
+    def get_joint_names(self):
+        return copy.deepcopy(self._joint_names)
+    
 
     ############ Update methods ############
 
@@ -304,10 +332,34 @@ class Robot_dynamic_kinematic_server():
     ############ Setter methods ############
 
     def set_joint_torques(self, torques):
+        """
+        Get the current pan angle of the head.
+
+        @rtype: float
+        @return: current angle in radians
+        """
         self._limb.set_joint_torques(torques)
     
     def set_DispalyAngle(self, jointangle):
-        pass #TODO implement display angle
+        """
+        Pan at the given speed to the desired angle.
+
+        @type angle: float
+        @param angle: Desired pan angle in radians.
+        @type speed: int
+        @param speed: Desired speed to pan at, range is 0-1.0 [1.0]
+        @type timeout: float
+        @param timeout: Seconds to wait for the head to pan to the
+                        specified angle. If 0, just command once and
+                        return. [10]
+        @param active_cancellation: Specifies if the head should aim at
+                        a location in the base frame. If this is set to True,
+                        the "angle" param is measured with respect to
+                        the "/base" frame, rather than the actual head joint
+                        value. Valid range is [-pi, pi) radians.
+        @type active_cancellation: bool
+        """
+        self._head.set_pan(jointangle, speed = 1.0, timeout = 10.0, active_cancellation = False)
   
    
   

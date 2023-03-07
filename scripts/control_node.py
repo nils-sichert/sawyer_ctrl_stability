@@ -19,27 +19,21 @@ from scipy.spatial.transform import Rotation as R
 
 """
 Please add Bugs and Todos here:
-TODO easier handle of controller positions
-TODO each controller hold position while changing controller (same setpoints)
-TODO add method to move to neutral
 TODO suppres collision avoidance
-TODO joint angles 8x1 inlc. head
-ctrl.move2neutral(neutral pose)
-move2neutral(self, neutral_pose=rospy.get_param...)
-
 TODO https://support.rethinkrobotics.com/support/solutions/articles/80000980380-motion-interface-tutorial
 """
 
 class controller():
     def __init__(self, limb = "right", ControlStartStop = False, joint_angle_desired = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40],
-                 joint_velocity_desired = [0, 0, 0, 0, 0, 0, 0], controlState = 3, joint_stiffness = [20], joint_damping = [1], neutral_pose = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40]):
+                 joint_velocity_desired = [0, 0, 0, 0, 0, 0, 0], controlState = 3, joint_stiffness = [20], joint_damping = [1], neutral_pose = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40], move2neutral = False):
+        
         print("Initializing node...")
-        #TODO ROS_SET: passed as default option when init class
-        rospy.init_node('Control_node', anonymous=True)
+
+        rospy.init_node('Control_manager', anonymous=True)
         
         ##### Instances ######
         # Settings
-        self.settings = Setting_server(ControlStartStop, joint_angle_desired, joint_velocity_desired, controlState,joint_stiffness, joint_damping, neutral_pose)
+        self.settings = Setting_server(ControlStartStop, joint_angle_desired, joint_velocity_desired, controlState,joint_stiffness, joint_damping, neutral_pose, move2neutral)
 
         # Robot
         self.robot_dyn_kin = Robot_dynamic_kinematic_server(limb)
@@ -52,7 +46,9 @@ class controller():
         self.PD_impedance_jointspace  = pd_impedance_jointspace()
 
         # Safety and Watchguard
-        self.safety_regulator = Safety_regulator(self.robot_dyn_kin.get_joint_limits(), self.robot_dyn_kin.get_torque_limits())
+        joint_angle_limit_upper, joint_angle_limit_lower = self.robot_dyn_kin.get_joint_limits()
+        joint_effort_limit_upper, joint_effort_limit_lower = self.robot_dyn_kin.get_torque_limits()
+        self.safety_regulator = Safety_regulator(joint_angle_limit_upper, joint_angle_limit_lower, joint_effort_limit_upper, joint_effort_limit_lower )
 
         ### Publisher ###
         # create cuff disable publisher
@@ -62,24 +58,22 @@ class controller():
         # create publisher to disable default gravity compensation
         gc_ns = 'robot/limb/' + limb + '/suppress_gravity_compensation'
         self._pub_gc_disable = rospy.Publisher(gc_ns, Empty, queue_size=1)
+
+        # create publisher to disable collision avoidance
+        # coll_ns = 'robot/limb/' + limb + '/suppress_' TODO find topic
+
         
         ### Debug Publisher ###
         self._pub_error = rospy.Publisher('/control_node_debug/EE_Pose_Error', JointState, queue_size=1)
         self._pub_joint_velocity = rospy.Publisher('/control_node_debug/joint_velocity', JointState, queue_size=1)
 
-        self.rate = 100
-
-        # Robot limit and safety
-        # TODO limit subscriber /robot/joint_limits
-        limit = 100
-        self.joint_efforts_safety_lower = [-limit,-limit,-limit,-limit,-limit,-limit,-limit]
-        self.joint_efforts_safety_upper = [limit,limit,limit,limit,limit,limit,limit]
+        self.rate = 100 # Control rate
 
         # Instance state varibles
-        self.jacobian = self.calc_jacobian()
-        self.jacobian_prev = self.jacobian
         self.torque_motor_t_1 = [0,0,0,0,0,0,0]
         self.timestamp_t_1 = 0
+        self.Kd = None
+        self.Dd = None
 
 
     ############ Publisher (Debugpurpose) ############ 
@@ -106,11 +100,11 @@ class controller():
         """
         Kd = self.update_Kd()
         Dd = self.update_Dd()
-        samlpingTime = self.get_periodTime() 
-        joint_angle_desi = self.safety_regulator.watchdog_joint_limits_jointangle_control(np.atleast_2d(np.array(self.settings.get_joint_angle_desired())).T)
+        periodTime = self.get_periodTime() 
+        joint_angle_desi = np.atleast_2d(self.safety_regulator.watchdog_joint_limits_jointangle_control(self.settings.get_joint_angle_desired())).T
         joint_velocity_desi = np.atleast_2d(np.array(self.settings.get_joint_velocity_desired())).T
 
-        return Kd, Dd, samlpingTime, joint_angle_desi, joint_velocity_desi
+        return Kd, Dd, periodTime, joint_angle_desi, joint_velocity_desi
         
     def update_Kd(self):
         """
@@ -119,7 +113,7 @@ class controller():
         Return: Kd (7x7)
         """
         old_Kd = self.Kd
-        tmp = rospy.get_param("control_node/Kd")
+        tmp = self.settings.get_stiffness()
         if type(tmp) is list:
             if len(tmp)==7:
                 tmp_list = [0,1,2,3,4,5,6]
@@ -145,7 +139,7 @@ class controller():
         Return: Kd (7x7)
         """
         old_Dd = self.Dd
-        tmp = rospy.get_param("control_node/Dd")
+        tmp = self.settings.get_damping()
         if type(tmp) is list:
             if len(tmp)==7:
                 tmp_list = [0,1,2,3,4,5,6]
@@ -220,6 +214,8 @@ class controller():
                 y[i] = (1-self.settings.get_lowpass_coeff())*y_t_1[i]+self.settings.get_lowpass_coeff()*y_t[i]
         return y
 
+    def move2neutral(self):
+        self.robot_dyn_kin.move2neutral()
    
     ############ Format converter (KDL/Numpy, List/Dict) ############ 
     
@@ -234,7 +230,7 @@ class controller():
             list_tmp.append(value)
         return list_tmp
     
-    def list2dictionary(self, list):
+    def list2dictionary(self, list, joint_names):
         """
         Transform list into dictionary.
         Parameters: list
@@ -242,7 +238,7 @@ class controller():
         """
         new_limb_torque = {}
         i = 0
-        for joint in self._limb.joint_names():
+        for joint in joint_names:
             new_limb_torque[joint] = list[i]
             i += 1
         return new_limb_torque
@@ -288,7 +284,7 @@ class controller():
         statecondition = self.settings.get_Statemachine_condition()
         if statecondition != 3 and statecondition != 4:
             statecondition = 3
-            rospy.set_param("control_node/controllerstate", 3)
+            self.settings.set_Statemachine_condition(3)
         return statecondition
     
     def set_initalstate(self, current_joint_angle):
@@ -337,7 +333,7 @@ class controller():
         elif statecondition == 4: # State 4: PD impedance Controller - jointspace
             motor_torque = self.PD_impedance_jointspace.calc_joint_torque(gravity, Kd, Dd, coriolis, joint_angle_error, joint_velocity_error)
             return motor_torque
-                                                                            
+
         else:
             print('State does not exists. Exiting...')
             pass
@@ -354,25 +350,30 @@ class controller():
             ### UPDATE current robot state ###
             self.robot_dyn_kin.update_robot_states(self.get_periodTime())
             controller_flag = self.settings.get_control_flag()
+            move2neutral = self.settings.get_move2neutral()
+
+            if move2neutral == True:
+                controller_flag = False
+                self.move2neutral()
+                move2neutral = False
         
-            if controller_flag == False:
-                current_joint_angle = self.dictionary2list(self.robot_dyn_kin.get_current_joint_angles())
-                self.set_initalstate(current_joint_angle)
+            if controller_flag == False:              
+                self.set_initalstate(self.robot_dyn_kin.get_current_joint_angles_list())
 
             if controller_flag == True:
 
                 ### GET current robot state ###
-                cur_joint_angle = self.robot_dyn_kin.get_current_joint_angles().T          # numpy 7x1
-                cur_joint_velocity = self.robot_dyn_kin.get_current_joint_velocities().T   # numpy 7x1
+                cur_joint_angle = self.robot_dyn_kin.get_current_joint_angles()         # numpy 7x1
+                cur_joint_velocity = self.robot_dyn_kin.get_current_joint_velocities()  # numpy 7x1
                 inertia = self.robot_dyn_kin.get_inertia()    # numpy 7x7 
-                gravity = self.robot_dyn_kin.get_gravity_compensation().T  # numpy 7x1 
+                gravity = self.robot_dyn_kin.get_gravity_compensation()  # numpy 7x1 
                 jacobian = self.robot_dyn_kin.get_jacobian()  # numpy 6x7 
                 djacobian = self.robot_dyn_kin.get_djacobian()
-                coriolis = self.robot_dyn_kin.get_coriolis().T # numpy 7x1
+                coriolis = self.robot_dyn_kin.get_coriolis() # numpy 7x1
                 
                 ### UPDATE current parameter and desired position and velocity ###
-                Kd, Dd, periodTime, jacobian_prev, joint_angle_desi, joint_velocity_desi = self.update_parameters() # updates Kd, Dd
-                statecondition = self.settings.get_Statemachine_condition() # int
+                Kd, Dd, periodTime, joint_angle_desi, joint_velocity_desi = self.update_parameters() # updates Kd, Dd
+                statecondition = self.get_statecondition() # int
 
                 ### CALCULATE error
                 joint_angle_error = self.calc_error_joint(cur_joint_angle, joint_angle_desi)
@@ -393,14 +394,11 @@ class controller():
                 self.publish_error(joint_velocity_error, cur_joint_velocity,self._pub_joint_velocity)
 
                 ### CONVERT controller output in msg format dictionary
-                
-                torque_motor_dict = self.list2dictionary(self.clip_joints_effort_safe((torque_motor)))
-                
+
+                torque_motor_dict = self.list2dictionary(torque_motor, self.robot_dyn_kin.get_joint_names())
+
                 ### PUBLISH Joint torques
                 self.robot_dyn_kin.set_joint_torques(torque_motor_dict)
-
-                ### SET values for t-1 calcualtions
-                self.jacobian_prev = jacobian
             
             rospy.Rate(self.rate).sleep()
         self.clean_shutdown()

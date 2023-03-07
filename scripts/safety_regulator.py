@@ -4,23 +4,21 @@ import numpy as np
 
 
 class Safety_regulator():
-    def __init__(self, joint_limits, torque_limits):
-        self.joint_limits = joint_limits
-        self.torque_limits = torque_limits
-
-        # TODO replace values by actual limits
+    def __init__(self, joint_angle_limits_upper, joint_angle_limits_lower, joint_efforts_limits_upper, joint_efforts_limits_lower):
         safety_margin = 0.05 # %-safety margin
-        self.joint_angle_limits_lower = -joint_limits
-        self.joint_angle_limits_upper = joint_limits
-        self.joint_angle_safety_lower = -joint_limits*(1-safety_margin)
-        self.joint_angle_safety_upper = joint_limits*(1-safety_margin)
-        self.joint_efforts_limit_lower = -torque_limits
-        self.joint_efforts_limit_upper = torque_limits
+
+        self.joint_angle_limit_upper = joint_angle_limits_upper[0]
+        self.joint_angle_limit_lower = joint_angle_limits_lower[0]
+        self.joint_angle_safety_upper = self.joint_angle_limit_upper*(1-safety_margin)
+        self.joint_angle_safety_lower = self.joint_angle_limit_lower*(1-safety_margin)
+        self.joint_efforts_limit_upper = joint_efforts_limits_upper[0]
+        self.joint_efforts_limit_lower = joint_efforts_limits_lower[0]
+        
 
     ############ Watchdogs ############ 
     
     def watchdog_joint_limits_torque_control(self, jointangles, gravitycompensation, motor_torques):
-        for value in self.joints_in_safe_limits(jointangles):
+        for value in self.joints_in_safe_limits(jointangles)[0]:
             if value == False:
                 tmp = False
                 break
@@ -41,7 +39,7 @@ class Safety_regulator():
         motor_torques = self.clip_joints_effort_safe(motor_torques)
         return motor_torques
     
-    def watchdog_oscillation(self):
+    def watchdog_oscillation(self, motor_torques):
         # TODO implement Oscillation detection
         if True:
             control_StartStop_Flag = True
@@ -92,12 +90,13 @@ class Safety_regulator():
         return np.clip(effort, lower_lim, upper_lim)
     
     def clip_joint_effort_approach_jointlimit(self, motor_torques, joint_angles, gravity_compensation, torque_reduction_factor = 0.1):
-        for i in range(len(motor_torques)):
-            if joint_angles[i] <= self.joint_angle_safety_lower[i] or joint_angles[i] >= self.joint_angle_safety_upper[i]:
-                new_torque = (motor_torques[i]-gravity_compensation[i])*torque_reduction_factor+gravity_compensation[i]
-                motor_torques[i] = new_torque
+        # TODO debug effort decreasing when approaching joint limit 
+        # for i in range(len(motor_torques)):
+        #    if joint_angles[i] <= self.joint_angle_safety_lower[i] or joint_angles[i] >= self.joint_angle_safety_upper[i]:
+        #        new_torque = (motor_torques[i]-gravity_compensation[i])*torque_reduction_factor+gravity_compensation[i]
+        #        motor_torques[i] = new_torque
         return motor_torques
-     
+
 def main():
     watchdog = Safety_regulator(np.array([1,1,1,1,1,1,1]),np.array([-1,-1,-1,-1,-1,-1,-1]))
     joint_angles = np.array([0.5, 0.5, 0.9, 2, -2, 0.5, 0.5])

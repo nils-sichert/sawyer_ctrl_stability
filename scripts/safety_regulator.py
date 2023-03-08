@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import numpy as np
+import rospy
 
 
 class Safety_regulator():
@@ -13,7 +14,14 @@ class Safety_regulator():
         self.joint_angle_safety_lower = self.joint_angle_limit_lower*(1-safety_margin)
         self.joint_efforts_limit_upper = joint_efforts_limits_upper[0]
         self.joint_efforts_limit_lower = joint_efforts_limits_lower[0]
-        
+
+        self.oscillation_observer_window_length = 50
+        self.oscillation_observer_activ = False
+        self.oscillation_window = np.zeros((len(self.joint_angle_limit_lower),self.oscillation_observer_window_length))
+        self.oscillation_shutoff_frequency = 20 #Hz
+        self.oscillation_shutoff_power = 40
+        self.counter = 0
+
 
     ############ Watchdogs ############ 
     
@@ -39,13 +47,31 @@ class Safety_regulator():
         motor_torques = self.clip_joints_effort_safe(motor_torques)
         return motor_torques
     
-    def watchdog_oscillation(self, motor_torques):
-        # TODO implement Oscillation detection
-        if True:
-            control_StartStop_Flag = True
-        else:    
-            control_StartStop_Flag = False
-        return control_StartStop_Flag
+    def watchdog_oscillation(self, motor_torques, rate):
+        motor_torques = np.atleast_2d(motor_torques).T
+        flag = True
+        power = [0]
+        frequency = [0]
+        tmp = np.delete(self.oscillation_window,1,1)
+        if self.oscillation_observer_activ == False:
+            self.counter += 1
+        self.oscillation_window = np.concatenate((tmp, motor_torques), axis=1)
+        if self.counter >= self.oscillation_observer_window_length + 1:
+            for j in range(len(motor_torques)): 
+                signal = self.oscillation_window[j,:]
+                power = np.abs(np.fft.rfft(signal))
+                length_power = len(power)
+                frequency = np.linspace(0, rate/2, length_power)
+                
+                for i in range(length_power):
+                    f_tmp = frequency[i]
+                    if f_tmp >= self.oscillation_shutoff_frequency:
+                        if np.abs(power[i]) >= self.oscillation_shutoff_power:
+                            flag = False
+                            print("[Saftey regulator]: Oscillation shutdown at joint: ", j)
+                            break
+                        # TODO add reset self.oscillation_observer_activ flag to be able to restart controller
+        return flag, power, frequency
 
     ############ Manipulators #############
         

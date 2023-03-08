@@ -4,8 +4,9 @@
         
 import rospy
 import numpy as np
-from sensor_msgs.msg import JointState
-from std_msgs.msg import Empty
+from sensor_msgs.msg import JointState, PointCloud
+from geometry_msgs.msg import Point32
+from std_msgs.msg import Empty, Header
 from intera_core_msgs.msg import JointLimits, SEAJointState
 import sys, os
 
@@ -15,6 +16,9 @@ from setting_server import Setting_server
 from robot_dyn_kin_server import Robot_dynamic_kinematic_server
 from safety_regulator import Safety_regulator
 from scipy.spatial.transform import Rotation as R
+
+from matplotlib import pyplot as plt
+from matplotlib import animation
 
 
 """
@@ -66,6 +70,7 @@ class controller():
         ### Debug Publisher ###
         self._pub_error = rospy.Publisher('/control_node_debug/EE_Pose_Error', JointState, queue_size=1)
         self._pub_joint_velocity = rospy.Publisher('/control_node_debug/joint_velocity', JointState, queue_size=1)
+        self._pub_oscillation = rospy.Publisher('/control_node_debug/oscillation_joint1', PointCloud, queue_size=1)
 
         self.rate = 100 # Control rate
 
@@ -88,6 +93,18 @@ class controller():
         msg.position = error_pos
         msg.velocity = error_vel
         publisher.publish(msg)
+    
+    def publish_oscillation(self, power, frequency, publisher: rospy.Publisher):
+        msg = PointCloud()
+        #filling pointcloud header
+        header = Header()
+        header.stamp = rospy.Time.now()
+        header.frame_id = 'world'
+        msg.header = header
+        for i in range(len(power)):
+            msg.points.append(Point32(frequency[i],power[i],0))
+        publisher.publish(msg)
+
 
 
     ############ Update States/ Variables ############ 
@@ -344,7 +361,7 @@ class controller():
         Parameters: None
         Return: motor torques (dict: 7x1)
         """
-        
+        figure = plt.figure(1)
         while not rospy.is_shutdown():
 
             ### UPDATE current robot state ###
@@ -384,12 +401,13 @@ class controller():
                 ### Safety Regulator
                 torque_motor = self.safety_regulator.watchdog_joint_limits_torque_control(cur_joint_angle, gravity, torque_motor)
                 torque_motor = self.safety_regulator.watchdog_torque_limits(torque_motor)
-                
-                self.settings.set_control_flag(self.safety_regulator.watchdog_oscillation(torque_motor))
+                flag, power, frequency = self.safety_regulator.watchdog_oscillation(torque_motor, self.rate)
+                self.settings.set_control_flag(flag)
 
                 ### DISABLE cuff and gravitation compensation and PUBLISH debug values
                 self._pub_cuff_disable.publish()  # TODO cuff disable/ enable by default / maybe FLAG script
                 self._pub_gc_disable.publish()
+                self.publish_oscillation(power, frequency, self._pub_oscillation)
 
                 self.publish_error(joint_velocity_error, cur_joint_velocity,self._pub_joint_velocity)
 
@@ -397,7 +415,7 @@ class controller():
 
                 torque_motor_dict = self.list2dictionary(torque_motor, self.robot_dyn_kin.get_joint_names())
 
-                ### PUBLISH Joint torques
+                ### PUBLISH Joint  torques
                 self.robot_dyn_kin.set_joint_torques(torque_motor_dict)
             
             rospy.Rate(self.rate).sleep()
@@ -424,5 +442,5 @@ wrench:
   force: {x: 100.0, y: 0.0, z: 0.0}
   torque: {x: 0.0, y: 0.0, z: 0.0}
 start_time: {secs: 0, nsecs: 0}
-duration: {secs: 5, nsecs: 0}" 
+duration: {secs: 5, nsecs: 0}
 '''

@@ -9,6 +9,7 @@ from geometry_msgs.msg import Point32
 from std_msgs.msg import Empty, Header
 from intera_core_msgs.msg import JointLimits, SEAJointState
 import sys, os
+import tf.transformations as tft
 
 from cartesianspace_controller import pd_impedance_cartesian, dlr_impedance_cartesian
 from jointspace_controller import pd_impedance_jointspace, spring_damper_jointspace
@@ -23,8 +24,9 @@ from matplotlib import animation
 
 """
 Please add Bugs and Todos here:
-TODO suppres collision avoidance
 TODO https://support.rethinkrobotics.com/support/solutions/articles/80000980380-motion-interface-tutorial
+TODO add switch between cartesian pose and joint space pose
+TODO improve cartesian pose getter and setter
 """
 
 class controller():
@@ -76,6 +78,7 @@ class controller():
 
         # Instance state varibles
         self.torque_motor_t_1 = [0,0,0,0,0,0,0]
+        self.pose_cart = None
         self.timestamp_t_1 = 0
         self.Kd = None
         self.Dd = None
@@ -175,37 +178,44 @@ class controller():
             print('New Damping was choosen: ', self.Dd)
         return self.Dd
    
-    def calc_error_cart(self, pos_vec, rot_mat, curr_velocity, pose_desi):
+    def calc_error_cart(self, pose_desi, jacobian, current_joint_velocity, velocity_desired = [0,0,0,0,0,0],):
         """
         Calculation of position-, orientation-, velociteserrors and acceleration
         Parameters: position vector (3x1), rotation matrix (3x3), current velocity (6x1), desired pose (6x1)
         Return: error pose (6x1), error velocities (6x1), acceleration (6x1)
         TODO debug Orientation error calculation
         """
-        # Position Error
-        error_pos = np.array([pos_vec[0]-pose_desi[0], pos_vec[1]-pose_desi[1], pos_vec[2]-pose_desi[2]])
+        # input current pose
+        tf_mat_cur = self.robot_dyn_kin.get_current_cartesian_tf()
+        
+        # Position Error # TODO check sign
+        pos_x, pos_y, pos_z = tf_mat_cur[0,3], tf_mat_cur[1,3], tf_mat_cur[2,3]
+
+        error_position = - np.array([pos_x-pose_desi[0], pos_y-pose_desi[1], pos_z-pose_desi[2]])
 
         # Orientation Error
-        r = R.from_matrix([rot_mat])
-        quat_c = np.atleast_2d(np.array(r.as_quat()))
-        pose_to_quat = R.from_euler('xyz', [pose_desi[3], pose_desi[4], pose_desi[5]], degrees=True)
-        quat_d = np.atleast_2d(np.array(pose_to_quat.as_quat()))
-        
-        #error_orientation = -(quat_c[0][0] * quat_d[0][1:] - quat_d[0][0] * quat_c[0][1:] - np.cross(quat_d[0][1:], quat_c[0][1:]))
-        error_orientation = np.zeros((3))
-        error_pose = np.atleast_2d(np.concatenate((error_pos, error_orientation))).T
+        # calculate quaternions current position
+        # R = tft.rotation_matrix(0.123, (1, 2, 3))
+
+        quat_c = np.atleast_2d(tft.quaternion_from_matrix(tf_mat_cur)).T
+
+        # calculate quaternions desired position / euler sequence xyz
+        roll = pose_desi[3]
+        pitch = pose_desi[4]
+        yaw = pose_desi[5]
+        quat_d = np.atleast_2d(tft.quaternion_from_euler(roll, pitch, yaw)).T
+        quat_c_vec = np.atleast_2d(quat_c[1:,0]).T
+        quat_d_vec = np.atleast_2d(quat_d[1:,0]).T
+        cross = np.atleast_2d(self.cross(quat_d_vec, quat_c_vec))
+        quat_err =  quat_d[0,0] * quat_c_vec - quat_c[0,0] * quat_d_vec + cross
+        error_pose = np.atleast_2d(np.concatenate((error_position, quat_err))).T
         
         # Velocity error
-        velocity_d = np.zeros((6,1))
-        curr_velocity_tmp = np.zeros((6,1))
-        for i in range(6):
-            curr_velocity_tmp[i] = curr_velocity[i][0,0]
-        error_velocity = curr_velocity_tmp - curr_velocity_tmp # TODO change to not zero and actual error
-        
-        # Acceleration Vector
-        ddx = np.zeros((6,1))
+        # TODO check sign
+        velocity_desired = np.atleast_2d(velocity_desired).T
+        error_velocity = jacobian * current_joint_velocity - velocity_desired
 
-        return error_pose, error_velocity, ddx
+        return error_pose, error_velocity
 
     def calc_error_joint(self, current, desired):
         """
@@ -234,6 +244,12 @@ class controller():
     def move2neutral(self):
         self.robot_dyn_kin.move2neutral()
    
+    def cross(self, a,b):
+        cross = [a[1]*b[2] - a[2]*b[1],
+            a[2]*b[0] - a[0]*b[2],
+            a[0]*b[1] - a[1]*b[0]]
+        return cross
+
     ############ Format converter (KDL/Numpy, List/Dict) ############ 
     
     def dictionary2list(self, dic):  
@@ -277,19 +293,6 @@ class controller():
         self.timestamp_t_1 = time_now    
         return period
     
-    def get_cur_pose(self, pos_vec, rot_mat):
-        """
-        Get current pose from position and rotation matrix.
-        Parameters: position (3x1), roation matrix (3x3)
-        Return: pose (6x1)
-        """
-        r = R.from_matrix(rot_mat)
-        rot_vec = r.as_rotvec()
-        pose = [0]*6
-        for i in range(3):
-            pose[i]=pos_vec[i]
-            pose[i+3] = rot_vec[i]
-        return pose
     
     def get_statecondition(self):
         """
@@ -299,7 +302,7 @@ class controller():
         Return: statecondition (int)
         """
         statecondition = self.settings.get_Statemachine_condition()
-        if statecondition != 3 and statecondition != 4:
+        if statecondition != 3 and statecondition != 4 and statecondition != 1:
             statecondition = 3
             self.settings.set_Statemachine_condition(3)
         return statecondition
@@ -307,6 +310,9 @@ class controller():
     def set_initalstate(self, current_joint_angle):
         rospy.set_param("control_node/joint_angle_desi", current_joint_angle)
         rospy.set_param("named_poses/right/poses/neutral", current_joint_angle)
+
+    def set_cartesian_inital_pose(self, pose):
+        self.pose_cart = pose
 
     ############ Control loop ############ 
 
@@ -317,7 +323,7 @@ class controller():
         print("\nExiting Control node...")
         self.robot_dyn_kin.clean_shutdown()
 
-    def run_statemachine(self, statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, Kd, Dd, periodTime, coriolis, inertia, gravity, jacobian, djacobian):
+    def run_statemachine(self, statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, Kd, Dd, periodTime, coriolis, inertia, gravity, jacobian, djacobian, cartesian_pose_error, cartesian_velocity_error, cartesian_acceleration):
         """
         Statemachine is shifting between different control algorithms. The statecondition is a Ros parameter and can therefore be changed 
             while running the loop. Also, the method get_statecondition can be used to implement a switch condition or a switch observer.
@@ -331,11 +337,7 @@ class controller():
         
         if statecondition == 1: # State 1: DLR impedance controller - cartesian space (Source DLR: Alin Albu-Schäffer )
             Kd = Kd[:6,:6]
-            ddx = None
-            err_pose_cart = None
-            err_vel_cart = None
-            sampling_time = 0
-            motor_torque = self.DLR_Impedance_Cartesian.calc_joint_torque(Kd, ddx, cur_joint_angle, cur_joint_velocity, err_pose_cart, err_vel_cart, inertia, coriolis, jacobian, djacobian, gravity, sampling_time)
+            motor_torque = self.DLR_Impedance_Cartesian.calc_joint_torque(Kd, cartesian_acceleration, cur_joint_angle, cur_joint_velocity, cartesian_pose_error, cartesian_velocity_error,  inertia, coriolis, jacobian, djacobian, gravity, periodTime)
             return motor_torque
         
         elif statecondition == 2: # State 2: PD impedance controller - cartesian space 
@@ -361,7 +363,6 @@ class controller():
         Parameters: None
         Return: motor torques (dict: 7x1)
         """
-        figure = plt.figure(1)
         while not rospy.is_shutdown():
 
             ### UPDATE current robot state ###
@@ -376,6 +377,8 @@ class controller():
         
             if controller_flag == False:              
                 self.set_initalstate(self.robot_dyn_kin.get_current_joint_angles_list())
+                self.set_cartesian_inital_pose(self.robot_dyn_kin.get_current_cartesian_pose())
+                self.safety_regulator.reset_watchdig_oscillation()
 
             if controller_flag == True:
 
@@ -395,8 +398,12 @@ class controller():
                 ### CALCULATE error
                 joint_angle_error = self.calc_error_joint(cur_joint_angle, joint_angle_desi)
                 joint_velocity_error = self.calc_error_joint(cur_joint_velocity, joint_velocity_desi)
+
+                cartesian_pose_error, cartesian_velocity_error = self.calc_error_cart(self.pose_cart, self.robot_dyn_kin.get_jacobian(), self.robot_dyn_kin.get_current_joint_velocities())
+                cartesian_acceleration = self.robot_dyn_kin.get_cartesian_acceleration_EE()
                 
-                torque_motor = self.run_statemachine(statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, Kd, Dd, periodTime, coriolis, inertia, gravity, jacobian, djacobian)
+                torque_motor = self.run_statemachine(statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, Kd, Dd, periodTime, 
+                                                     coriolis, inertia, gravity, jacobian, djacobian, cartesian_pose_error, cartesian_velocity_error, cartesian_acceleration)
                 
                 ### Safety Regulator
                 torque_motor = self.safety_regulator.watchdog_joint_limits_torque_control(cur_joint_angle, gravity, torque_motor)

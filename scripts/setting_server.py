@@ -2,7 +2,7 @@
 import rospy
 
 class Setting_server():
-    def __init__(self, ControlStartStop, joint_angle_desired, joint_velocity_desired, statemachine_condition,joint_stiffness, joint_damping, neutral_pose, move2neutral):
+    def __init__(self, ControlStartStop, joint_angle_desired, joint_velocity_desired, statemachine_condition,joint_stiffness, joint_damping, neutral_pose, move2neutral, window_length = 40, corner_frequency = 20, power_limit = 40):
         # rospy.init_node('setting_server', anonymous=True)
 
         # Set inital parameters # 
@@ -16,6 +16,11 @@ class Setting_server():
         rospy.set_param("named_poses/right/poses/neutral", neutral_pose)
         rospy.set_param("control_node/Lowpass_coeff", 0.6)
         rospy.set_param("control_node/move2neutral", move2neutral)
+        rospy.set_param("control_node/oscillation_window_len", window_length)
+        rospy.set_param("control_node/oscillation_corner_freq", corner_frequency)
+        rospy.set_param("control_node/oscillation_power_limit", power_limit)
+
+       
 
 
     ######## Getter Methods ########
@@ -46,6 +51,15 @@ class Setting_server():
     
     def get_move2neutral(self):
         return rospy.get_param("control_node/move2neutral")
+    
+    def get_oscillation_window_len(self):
+        return rospy.get_param("control_node/oscillation_window_len")
+    
+    def get_oscillation_corner_freq(self):
+        return rospy.get_param("control_node/oscillation_corner_freq")
+        
+    def get_oscillation_power_limit(self):    
+        return rospy.get_param("control_node/oscillation_power_limit")
 
 
     ######## Setter Methods ########
@@ -72,10 +86,20 @@ class Setting_server():
         return rospy.set_param("named_poses/right/poses/neutral", neutral_pose)
     
     def set_lowpass_coeff(self, coeff):
-        return rospy.get_param("control_node/Lowpass_coeff", coeff)
+        return rospy.set_param("control_node/Lowpass_coeff", coeff)
 
     def set_move2neutral(self, Flag):
         return rospy.set_param("control_node/move2neutral", Flag)
+    
+    def set_oscillation_window_len(self, length):
+        return rospy.set_param("control_node/oscillation_window_len", length)
+    
+    def set_oscillation_corner_freq(self, frequency):
+        return rospy.set_param("control_node/oscillation_corner_freq", frequency)
+        
+    def set_oscillation_power_limit(self, limit):    
+        return rospy.set_param("control_node/oscillation_power_limit", limit)
+
     
 def main():
     settings = Setting_server(ControlStartStop = False, joint_angle_desired = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40],

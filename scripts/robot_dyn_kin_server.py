@@ -11,6 +11,7 @@ from kdl_parser_py import urdf
 import sys, os
 
 from scipy.spatial.transform import Rotation as R
+import tf.transformations as tft
 
 
 import intera_interface
@@ -103,19 +104,14 @@ class Robot_dynamic_kinematic_server():
 
         if kinematics_status >= 0:
             p = endeffec_frame.p
-            pos_vec = [p.x(),p.y(),p.z()]
+            # pos_vec = [p.x(),p.y(),p.z()]
             M = endeffec_frame.M
-            rot_mat = np.mat([[M[0,0], M[0,1], M[0,2]],
-                            [M[1,0], M[1,1], M[1,2]], 
-                            [M[2,0], M[2,1], M[2,2]]])
-            r = R.from_matrix(rot_mat)
-            rot_vec = r.as_rotvec()
-            pose = [0]*6
-            for i in range(3):
-                pose[i]= pos_vec[i]
-                pose[i+3] = rot_vec[i]
+            transformation_mat = np.array([[M[0,0], M[0,1], M[0,2], p.x()],
+                            [M[1,0], M[1,1], M[1,2], p.y()], 
+                            [M[2,0], M[2,1], M[2,2], p.z()],
+                            [0,0,0,1]])
 
-            return pos_vec, rot_mat, pose
+            return transformation_mat
                             
         else:
             return None
@@ -245,7 +241,7 @@ class Robot_dynamic_kinematic_server():
         return new_limb_torque
 
     def move2position(self, position):
-        self._limb.move_to_joint_positions(position, timeout = 10)
+        self._limb.move_to_joint_positions(position, timeout = 4)
 
     def move2neutral(self):
         self._limb.move_to_neutral(timeout = 3, speed = 0.3)
@@ -293,6 +289,14 @@ class Robot_dynamic_kinematic_server():
     
     def get_current_joint_velocities(self):
         return np.atleast_2d(self.dictionary2list(self._limb.joint_velocities())).T  
+    
+    def get_current_cartesian_tf(self):
+        pose = self.calc_pose_cartesianSpace('positions')
+        return pose
+    
+    def get_current_cartesian_velocity(self):
+        velocity = self.calc_pose_cartesianSpace('velocity')
+        return velocity
 
     def get_periodTime(self):
         return copy.deepcopy(self.periodTime)
@@ -318,7 +322,17 @@ class Robot_dynamic_kinematic_server():
     def get_joint_names(self):
         return copy.deepcopy(self._joint_names)
     
-
+    def get_cartesian_acceleration_EE(self):
+        # Acceleration Vector
+        return np.zeros((6,1))
+    
+    def get_current_cartesian_pose(self):
+        tf_mat = self.calc_pose_cartesianSpace('positions')
+        position_cart = np.atleast_2d([tf_mat[0,3], tf_mat[1,3], tf_mat[2,3]]).T
+        euler_cart = np.atleast_2d(tft.euler_from_matrix(tf_mat)).T
+        pose = np.concatenate((position_cart, euler_cart), axis = 0)
+        return pose
+    
     ############ Update methods ############
 
     def update_periodTime(self, periodTime):

@@ -5,7 +5,8 @@ import rospy
 
 
 class Safety_regulator():
-    def __init__(self, joint_angle_limits_upper, joint_angle_limits_lower, joint_efforts_limits_upper, joint_efforts_limits_lower):
+    def __init__(self, joint_angle_limits_upper, joint_angle_limits_lower, joint_efforts_limits_upper, joint_efforts_limits_lower, oscillation_observer_window_length = 50,
+                 oscillation_shutoff_frequency = 20, oscillation_shutoff_power = 40):
         safety_margin = 0.05 # %-safety margin
 
         self.joint_angle_limit_upper = joint_angle_limits_upper[0]
@@ -15,11 +16,11 @@ class Safety_regulator():
         self.joint_efforts_limit_upper = joint_efforts_limits_upper[0]
         self.joint_efforts_limit_lower = joint_efforts_limits_lower[0]
 
-        self.oscillation_observer_window_length = 50
+        self.oscillation_observer_window_length = oscillation_observer_window_length
         self.oscillation_observer_activ = False
         self.oscillation_window = np.zeros((len(self.joint_angle_limit_lower),self.oscillation_observer_window_length))
-        self.oscillation_shutoff_frequency = 20 #Hz
-        self.oscillation_shutoff_power = 40
+        self.oscillation_shutoff_frequency = oscillation_shutoff_frequency #Hz
+        self.oscillation_shutoff_power = oscillation_shutoff_power
         self.counter = 0
 
 
@@ -72,6 +73,14 @@ class Safety_regulator():
                             break
                         # TODO add reset self.oscillation_observer_activ flag to be able to restart controller
         return flag, power, frequency
+    
+    ############    Reset     #############
+
+    def reset_watchdig_oscillation(self):
+        self.oscillation_observer_activ = False
+        self.oscillation_window = np.zeros((len(self.joint_angle_limit_lower),self.oscillation_observer_window_length))
+        self.counter = 0
+        return
 
     ############ Manipulators #############
         

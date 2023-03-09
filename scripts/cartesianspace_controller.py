@@ -33,7 +33,7 @@ class dlr_impedance_cartesian():
         self._lambda_prev = np.zeros((6,6))
         
 
-    def calc_joint_torque(self,  Kd, ddx, q, dq, err_cart, derr_cart, inertia, coriolis, jacobian, djacobian_filtered, gravity, Sampling_Time, external_load = 0):
+    def calc_joint_torque(self,  Kd, cartesian_acceleration, cur_joint_angle, cur_joint_velocity, cartesian_pose_error, cartesian_velocity_error,  inertia, coriolis, jacobian, djacobian, gravity, periodTime, external_load = 0):
         '''
         Input: Jacobian dim:6x7 (J), gravity torque dim:7x1 (g), stiffness matrix dim:6x6 (Kd), joint_angle dim:7x1 (q),
                 joint_velocity dim: 7x1 (dq), cartesian pose error dim:6x1 (err_cart), cartesian velocity error dim:(6x1) (derr_cart),
@@ -54,20 +54,20 @@ class dlr_impedance_cartesian():
         Kd1 = np.sqrt(Kd)
         Dd = A @ self._D_eta @ Kd1 + Kd1 @ self._D_eta @ A
 
-        C_hat = 0.5*(Lambda-self._lambda_prev)/ Sampling_Time
+        C_hat = 0.5*(Lambda-self._lambda_prev)/ periodTime
 
-        F_tau = Lambda @ ddx - Dd @ derr_cart - Kd @ err_cart - C_hat* derr_cart - Lambda @ djacobian_filtered @ dq #- external_load
+        F_tau = Lambda @ cartesian_acceleration - Dd @ cartesian_velocity_error - Kd @ cartesian_pose_error - C_hat* cartesian_velocity_error - Lambda @ djacobian @ cur_joint_velocity #- external_load
 
         tau_task = jacobian.T @ F_tau
 
         # Nullspace control
         N = np.identity(7) - jacobian.T @ Lambda @ jacobian @ mass_inv
-        tau_nullspace = N @ (-Kn @ (q-self._qn) - Dn @ dq)
+        tau_nullspace = N @ (-Kn @ (cur_joint_angle-self._qn) - Dn @ cur_joint_velocity)
 
         # Desired torque
         tau_d = tau_task + tau_nullspace + coriolis + gravity
 
-        self._qn = q
+        self._qn = cur_joint_angle
 
         return self.vec2list(tau_d)
 

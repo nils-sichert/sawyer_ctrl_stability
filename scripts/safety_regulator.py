@@ -5,8 +5,8 @@ import rospy
 
 
 class Safety_regulator():
-    def __init__(self, joint_angle_limits_upper, joint_angle_limits_lower, joint_efforts_limits_upper, joint_efforts_limits_lower, oscillation_observer_window_length = 50,
-                 oscillation_shutoff_frequency = 20, oscillation_shutoff_power = 40):
+    def __init__(self, joint_angle_limits_upper, joint_angle_limits_lower, joint_efforts_limits_upper, joint_efforts_limits_lower, oscillation_observer_window_length,
+                 oscillation_shutoff_frequency, oscillation_shutoff_power):
         safety_margin = 0.05 # %-safety margin
 
         self.joint_angle_limit_upper = joint_angle_limits_upper[0]
@@ -48,7 +48,7 @@ class Safety_regulator():
         motor_torques = self.clip_joints_effort_safe(motor_torques)
         return motor_torques
     
-    def watchdog_oscillation(self, motor_torques, rate):
+    def watchdog_oscillation(self, motor_torques, rate, oscillation_observer_window_length, oscillation_frequency, oscillation_power):
         motor_torques = np.atleast_2d(motor_torques).T
         flag = True
         power = [0]
@@ -57,7 +57,7 @@ class Safety_regulator():
         if self.oscillation_observer_activ == False:
             self.counter += 1
         self.oscillation_window = np.concatenate((tmp, motor_torques), axis=1)
-        if self.counter >= self.oscillation_observer_window_length + 1:
+        if self.counter >= oscillation_observer_window_length + 1:
             for j in range(len(motor_torques)): 
                 signal = self.oscillation_window[j,:]
                 power = np.abs(np.fft.rfft(signal))
@@ -66,8 +66,8 @@ class Safety_regulator():
                 
                 for i in range(length_power):
                     f_tmp = frequency[i]
-                    if f_tmp >= self.oscillation_shutoff_frequency:
-                        if np.abs(power[i]) >= self.oscillation_shutoff_power:
+                    if f_tmp >= oscillation_frequency:
+                        if np.abs(power[i]) >= oscillation_power:
                             flag = False
                             print("[Saftey regulator]: Oscillation shutdown at joint: ", j)
                             break

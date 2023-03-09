@@ -2,7 +2,7 @@
 import rospy
 
 class Setting_server():
-    def __init__(self, ControlStartStop, joint_angle_desired, joint_velocity_desired, statemachine_condition,joint_stiffness, joint_damping, neutral_pose, move2neutral, window_length = 40, corner_frequency = 20, power_limit = 40):
+    def __init__(self, ControlStartStop, joint_angle_desired, joint_velocity_desired, statemachine_condition,joint_stiffness, joint_damping, neutral_pose, move2neutral, cartesian_pose = [0,0,0,0,0,0], window_length = 50, corner_frequency = 20, power_limit = 40):
         # rospy.init_node('setting_server', anonymous=True)
 
         # Set inital parameters # 
@@ -19,6 +19,7 @@ class Setting_server():
         rospy.set_param("control_node/oscillation_window_len", window_length)
         rospy.set_param("control_node/oscillation_corner_freq", corner_frequency)
         rospy.set_param("control_node/oscillation_power_limit", power_limit)
+        rospy.set_param("control_node/cartesian_pose_desired", cartesian_pose)
 
        
 
@@ -60,6 +61,9 @@ class Setting_server():
         
     def get_oscillation_power_limit(self):    
         return rospy.get_param("control_node/oscillation_power_limit")
+    
+    def get_cartesian_pose_desired(self):
+        return rospy.get_param("control_node/cartesian_pose_desired")
 
 
     ######## Setter Methods ########
@@ -99,6 +103,9 @@ class Setting_server():
         
     def set_oscillation_power_limit(self, limit):    
         return rospy.set_param("control_node/oscillation_power_limit", limit)
+    
+    def set_cartesian_pose_desired(self, pose):
+        return rospy.set_param("control_node/cartesian_pose_desired", pose)
 
     
 def main():

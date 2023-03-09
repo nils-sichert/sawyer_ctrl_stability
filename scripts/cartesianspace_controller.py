@@ -7,9 +7,10 @@ class pd_impedance_cartesian():
     def __init__(self):
         pass
 
-    def calc_joint_torque(self):
-        pass
-        # return self.vec2list(torque_list)
+    def calc_joint_torque(self, Kd, Dd, cartesian_pose_error, cartesian_velocity_error, coriolis, jacobian, gravity):
+        tau_d = jacobian.T @ (-Kd @ cartesian_pose_error - Dd @ cartesian_velocity_error) + coriolis + gravity
+        return self.vec2list(tau_d)
+        
     
     def vec2list(self,vec):
         """
@@ -20,7 +21,7 @@ class pd_impedance_cartesian():
         len_vec = len(vec)
         list = [0]*len_vec
         for i in range(len_vec):
-            list[i] = vec[i][0]
+            list[i] = vec[i][0,0]
         return list
         
 class dlr_impedance_cartesian():
@@ -44,25 +45,37 @@ class dlr_impedance_cartesian():
         
         Kn = self._Kn * 15
         Dn = self._Dn * np.sqrt(Kn[0][0])
-
+        #print("Mass: ", inertia)
         mass_inv = np.linalg.inv(inertia)
+        #print("Mass inverse: ", mass_inv)
         #mass_inv = np.identity(7)
         Lambda = np.linalg.inv(jacobian @ mass_inv @ jacobian.T)
+        #print("Lambda: ", Lambda)
 
         # Find best damping matrix with factorization damping design
         A = np.sqrt(np.abs(Lambda)) # TODO Error with square root -> square root of negative numbers, therefore abs()
+        #print("A without abs: ", np.sqrt(Lambda))
+        #print("A with abs: ", A)
+        
         Kd1 = np.sqrt(Kd)
         Dd = A @ self._D_eta @ Kd1 + Kd1 @ self._D_eta @ A
 
         C_hat = 0.5*(Lambda-self._lambda_prev)/ periodTime
-
+        # Law
         F_tau = Lambda @ cartesian_acceleration - Dd @ cartesian_velocity_error - Kd @ cartesian_pose_error - C_hat* cartesian_velocity_error - Lambda @ djacobian @ cur_joint_velocity #- external_load
-
+        # Dd eliminated
+        # F_tau = Lambda @ cartesian_acceleration - Kd @ cartesian_pose_error - Lambda @ djacobian @ cur_joint_velocity #- external_load
+        # Velocity = 0
+        # F_tau = Lambda @ cartesian_acceleration - Kd @ cartesian_pose_error #- external_load
+        
         tau_task = jacobian.T @ F_tau
 
         # Nullspace control
         N = np.identity(7) - jacobian.T @ Lambda @ jacobian @ mass_inv
+        # Law
         tau_nullspace = N @ (-Kn @ (cur_joint_angle-self._qn) - Dn @ cur_joint_velocity)
+        # Velocity = 0
+        # tau_nullspace = N @ (-Kn @ (cur_joint_angle-self._qn))
 
         # Desired torque
         tau_d = tau_task + tau_nullspace + coriolis + gravity

@@ -54,7 +54,7 @@ class controller():
         # Safety and Watchguard
         joint_angle_limit_upper, joint_angle_limit_lower = self.robot_dyn_kin.get_joint_limits()
         joint_effort_limit_upper, joint_effort_limit_lower = self.robot_dyn_kin.get_torque_limits()
-        self.safety_regulator = Safety_regulator(joint_angle_limit_upper, joint_angle_limit_lower, joint_effort_limit_upper, joint_effort_limit_lower )
+        self.safety_regulator = Safety_regulator(joint_angle_limit_upper, joint_angle_limit_lower, joint_effort_limit_upper, joint_effort_limit_lower, self.settings.get_oscillation_window_len(), self.settings.get_oscillation_corner_freq(),self.settings.get_oscillation_power_limit() )
 
         ### Publisher ###
         # create cuff disable publisher
@@ -191,7 +191,7 @@ class controller():
         # Position Error # TODO check sign
         pos_x, pos_y, pos_z = tf_mat_cur[0,3], tf_mat_cur[1,3], tf_mat_cur[2,3]
 
-        error_position = - np.array([pos_x-pose_desi[0], pos_y-pose_desi[1], pos_z-pose_desi[2]])
+        error_position = np.atleast_2d([pos_x-pose_desi[0], pos_y-pose_desi[1], pos_z-pose_desi[2]])
 
         # Orientation Error
         # calculate quaternions current position
@@ -208,7 +208,8 @@ class controller():
         quat_d_vec = np.atleast_2d(quat_d[1:,0]).T
         cross = np.atleast_2d(self.cross(quat_d_vec, quat_c_vec))
         quat_err =  quat_d[0,0] * quat_c_vec - quat_c[0,0] * quat_d_vec + cross
-        error_pose = np.atleast_2d(np.concatenate((error_position, quat_err))).T
+
+        error_pose = np.atleast_2d(np.concatenate((error_position, quat_err)))
         
         # Velocity error
         # TODO check sign
@@ -240,9 +241,6 @@ class controller():
             for i in range(len(y_t)):
                 y[i] = (1-self.settings.get_lowpass_coeff())*y_t_1[i]+self.settings.get_lowpass_coeff()*y_t[i]
         return y
-
-    def move2neutral(self):
-        self.robot_dyn_kin.move2neutral()
    
     def cross(self, a,b):
         cross = [a[1]*b[2] - a[2]*b[1],
@@ -302,17 +300,24 @@ class controller():
         Return: statecondition (int)
         """
         statecondition = self.settings.get_Statemachine_condition()
-        if statecondition != 3 and statecondition != 4 and statecondition != 1:
+        if statecondition != 3 and statecondition != 4 and statecondition != 1 and statecondition !=2:
             statecondition = 3
             self.settings.set_Statemachine_condition(3)
         return statecondition
     
+    def get_cartesian_pose_desired(self):
+        return np.atleast_2d(self.settings.get_cartesian_pose_desired())
+        
     def set_initalstate(self, current_joint_angle):
         rospy.set_param("control_node/joint_angle_desi", current_joint_angle)
         rospy.set_param("named_poses/right/poses/neutral", current_joint_angle)
 
     def set_cartesian_inital_pose(self, pose):
-        self.pose_cart = pose
+        list_tmp = [0,0,0,0,0,0]
+        pose_list = np.ndarray.tolist(pose)
+        for i in range(len(pose)):
+            list_tmp[i] = pose_list[i][0]
+        self.settings.set_cartesian_pose_desired(list_tmp)
 
     ############ Control loop ############ 
 
@@ -342,7 +347,8 @@ class controller():
         
         elif statecondition == 2: # State 2: PD impedance controller - cartesian space 
             Kd = Kd[:6,:6]
-            motor_torque = self.PD_impedance_cartesian.calc_joint_torque()
+            Dd = Dd[:6,:6]
+            motor_torque = self.PD_impedance_cartesian.calc_joint_torque(Kd, Dd, cartesian_pose_error, cartesian_velocity_error, coriolis, jacobian, gravity)
             return motor_torque
 
         elif statecondition == 3: # State 3: Spring/Damper impedance controller - jointspace
@@ -371,9 +377,10 @@ class controller():
             move2neutral = self.settings.get_move2neutral()
 
             if move2neutral == True:
+                # TODO debug
                 controller_flag = False
-                self.move2neutral()
-                move2neutral = False
+                self.robot_dyn_kin.move2neutral()
+                self.settings.set_move2neutral(False)
         
             if controller_flag == False:              
                 self.set_initalstate(self.robot_dyn_kin.get_current_joint_angles_list())
@@ -398,8 +405,8 @@ class controller():
                 ### CALCULATE error
                 joint_angle_error = self.calc_error_joint(cur_joint_angle, joint_angle_desi)
                 joint_velocity_error = self.calc_error_joint(cur_joint_velocity, joint_velocity_desi)
-
-                cartesian_pose_error, cartesian_velocity_error = self.calc_error_cart(self.pose_cart, self.robot_dyn_kin.get_jacobian(), self.robot_dyn_kin.get_current_joint_velocities())
+                pose_desired = self.get_cartesian_pose_desired().T
+                cartesian_pose_error, cartesian_velocity_error = self.calc_error_cart(pose_desired, self.robot_dyn_kin.get_jacobian(), self.robot_dyn_kin.get_current_joint_velocities())
                 cartesian_acceleration = self.robot_dyn_kin.get_cartesian_acceleration_EE()
                 
                 torque_motor = self.run_statemachine(statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, Kd, Dd, periodTime, 
@@ -408,13 +415,15 @@ class controller():
                 ### Safety Regulator
                 torque_motor = self.safety_regulator.watchdog_joint_limits_torque_control(cur_joint_angle, gravity, torque_motor)
                 torque_motor = self.safety_regulator.watchdog_torque_limits(torque_motor)
-                flag, power, frequency = self.safety_regulator.watchdog_oscillation(torque_motor, self.rate)
+                
+                flag, power, frequency = self.safety_regulator.watchdog_oscillation(torque_motor, self.rate, self.settings.get_oscillation_window_len(), self.settings.get_oscillation_corner_freq() , self.settings.get_oscillation_power_limit())
                 self.settings.set_control_flag(flag)
+                self.publish_oscillation(power, frequency, self._pub_oscillation)
 
                 ### DISABLE cuff and gravitation compensation and PUBLISH debug values
                 self._pub_cuff_disable.publish()  # TODO cuff disable/ enable by default / maybe FLAG script
                 self._pub_gc_disable.publish()
-                self.publish_oscillation(power, frequency, self._pub_oscillation)
+                
 
                 self.publish_error(joint_velocity_error, cur_joint_velocity,self._pub_joint_velocity)
 

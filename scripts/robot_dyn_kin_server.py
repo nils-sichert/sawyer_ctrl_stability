@@ -244,8 +244,8 @@ class Robot_dynamic_kinematic_server():
         self._limb.move_to_joint_positions(position, timeout = 4)
         return
 
-    def move2neutral(self):
-        self._limb.move_to_neutral(timeout = 5, speed = 0.3)
+    def move2neutral(self, timeout, speed):
+        self._limb.move_to_neutral(timeout, speed)
         return
 
     

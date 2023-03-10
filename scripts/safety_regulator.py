@@ -70,6 +70,7 @@ class Safety_regulator():
                         if np.abs(power[i]) >= oscillation_power:
                             flag = False
                             print("[Saftey regulator]: Oscillation shutdown at joint: ", j)
+                            print("[Safety regulator]: Please control values for stifness and damping.")
                             break
                         # TODO add reset self.oscillation_observer_activ flag to be able to restart controller
         return flag, power, frequency

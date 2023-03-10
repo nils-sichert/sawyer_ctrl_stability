@@ -144,12 +144,12 @@ class controller():
                 tmp = tmp[0]
                 self.Kd = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
             else:
-                print('[Update KD]: Wrong input format. Update of Kd is not executed')
+                print('[Control node / Update KD]: Wrong input format. Update of Kd is not executed')
         else:
-                print('[Update KD]: Wrong input format. Update of Kd is not executed')
+                print('[Control node / Update KD]: Wrong input format. Update of Kd is not executed')
 
         if not np.array_equal(old_Kd, self.Kd):
-            print('New Stiffness was choosen: ', self.Kd)
+            print('[Control node / Update KD]: New Stiffness was choosen: \n', self.Kd)
         return self.Kd
     
     def update_Dd(self):
@@ -170,12 +170,12 @@ class controller():
                 tmp = tmp[0]
                 self.Dd = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
             else:
-                print('[Update Dd]: Wrong input format. Update of Dd is not executed')
+                print('[Control node / Update Dd]: Wrong input format. Update of Dd is not executed')
         else:
-                print('[Update Dd]: Wrong input format. Update of Dd is not executed')
+                print('[Control node / Update Dd]: Wrong input format. Update of Dd is not executed')
 
         if not np.array_equal(old_Dd, self.Dd):
-            print('New Damping was choosen: ', self.Dd)
+            print('New Damping was choosen: \n', self.Dd)
         return self.Dd
    
     def calc_error_cart(self, pose_desi, jacobian, current_joint_velocity, velocity_desired = [0,0,0,0,0,0],):
@@ -290,8 +290,7 @@ class controller():
             period = 1/self.rate # period time in sec
         self.timestamp_t_1 = time_now    
         return period
-    
-    
+       
     def get_statecondition(self):
         """
         Gets statecondition from ROSPARAM server. This method can be used to implemend a decision
@@ -300,7 +299,7 @@ class controller():
         Return: statecondition (int)
         """
         statecondition = self.settings.get_Statemachine_condition()
-        if statecondition != 3 and statecondition != 4 and statecondition != 1 and statecondition !=2:
+        if statecondition != 3 and statecondition != 4: #and statecondition != 1 and statecondition !=2:
             statecondition = 3
             self.settings.set_Statemachine_condition(3)
         return statecondition
@@ -310,8 +309,7 @@ class controller():
         
     def set_initalstate(self, current_joint_angle):
         rospy.set_param("control_node/joint_angle_desi", current_joint_angle)
-        rospy.set_param("named_poses/right/poses/neutral", current_joint_angle)
-
+        
     def set_cartesian_inital_pose(self, pose):
         list_tmp = [0,0,0,0,0,0]
         pose_list = np.ndarray.tolist(pose)
@@ -369,6 +367,8 @@ class controller():
         Parameters: None
         Return: motor torques (dict: 7x1)
         """
+        print("[Control_node]: Own controlloop is working: ", self.settings.get_control_flag())
+        print("[Control_node]: If false, too turn on set rosparam to true.")
         while not rospy.is_shutdown():
 
             ### UPDATE current robot state ###
@@ -379,7 +379,10 @@ class controller():
             if move2neutral == True:
                 # TODO debug
                 controller_flag = False
-                self.robot_dyn_kin.move2neutral()
+                timeout = 5
+                speed = 0.2
+                self.robot_dyn_kin.move2neutral(timeout, speed)
+                print("[Control_node]: Moved to inital pose.")
                 self.settings.set_move2neutral(False)
         
             if controller_flag == False:              
@@ -423,7 +426,6 @@ class controller():
                 ### DISABLE cuff and gravitation compensation and PUBLISH debug values
                 self._pub_cuff_disable.publish()  # TODO cuff disable/ enable by default / maybe FLAG script
                 self._pub_gc_disable.publish()
-                
 
                 self.publish_error(joint_velocity_error, cur_joint_velocity,self._pub_joint_velocity)
 

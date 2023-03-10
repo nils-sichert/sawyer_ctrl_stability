@@ -15,6 +15,8 @@ class Safety_regulator():
         self.joint_angle_safety_lower = self.joint_angle_limit_lower*(1-safety_margin)
         self.joint_efforts_limit_upper = joint_efforts_limits_upper[0]
         self.joint_efforts_limit_lower = joint_efforts_limits_lower[0]
+        print("[Saftey regulator]: Allowed joint efforts upper limit: ", self.joint_efforts_limit_upper)
+        print("[Saftey regulator]: Allowed joint efforts lower limit: ", self.joint_efforts_limit_lower)
 
         self.oscillation_observer_window_length = oscillation_observer_window_length
         self.oscillation_observer_activ = False
@@ -45,8 +47,8 @@ class Safety_regulator():
         return joint_angles
     
     def watchdog_torque_limits(self, motor_torques):
-        motor_torques = self.clip_joints_effort_safe(motor_torques)
-        return motor_torques
+        motor_torques_ret = self.clip_joints_effort_safe(motor_torques)
+        return motor_torques_ret
     
     def watchdog_oscillation(self, motor_torques, rate, oscillation_observer_window_length, oscillation_frequency, oscillation_power):
         motor_torques = np.atleast_2d(motor_torques).T
@@ -73,6 +75,8 @@ class Safety_regulator():
                             print("[Safety regulator]: Please control values for stifness and damping.")
                             break
                         # TODO add reset self.oscillation_observer_activ flag to be able to restart controller
+        if flag == False:
+            self.reset_watchdig_oscillation()
         return flag, power, frequency
     
     ############    Reset     #############

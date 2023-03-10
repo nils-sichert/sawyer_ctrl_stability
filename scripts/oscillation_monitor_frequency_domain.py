@@ -36,7 +36,7 @@ class calback():
         self.ax1.bar(xs, ys)
 
     def run(self):
-        ani = animation.FuncAnimation(self.fig, self.animate, interval=100)
+        ani = animation.FuncAnimation(self.fig, self.animate, interval=10000)
         plt.show()
 
 plotter = calback()

@@ -73,6 +73,7 @@ class controller():
         self._pub_error = rospy.Publisher('/control_node_debug/EE_Pose_Error', JointState, queue_size=1)
         self._pub_joint_velocity = rospy.Publisher('/control_node_debug/joint_velocity', JointState, queue_size=1)
         self._pub_oscillation = rospy.Publisher('/control_node_debug/oscillation_joint1', PointCloud, queue_size=1)
+        self._pub_debug_torque_motor = rospy.Publisher("/control_node_debug/motor_torque", JointState, queue_size=1)
 
         self.rate = 100 # Control rate
 
@@ -108,6 +109,10 @@ class controller():
             msg.points.append(Point32(frequency[i],power[i],0))
         publisher.publish(msg)
 
+    def publish_joint_torques(self, torque_motor, publisher: rospy.Publisher):
+        msg = JointState()
+        msg.effort = torque_motor
+        publisher.publish(msg)
 
 
     ############ Update States/ Variables ############ 
@@ -416,11 +421,13 @@ class controller():
                                                      coriolis, inertia, gravity, jacobian, djacobian, cartesian_pose_error, cartesian_velocity_error, cartesian_acceleration)
                 
                 ### Safety Regulator
-                torque_motor = self.safety_regulator.watchdog_joint_limits_torque_control(cur_joint_angle, gravity, torque_motor)
+                # torque_motor = self.safety_regulator.watchdog_joint_limits_torque_control(cur_joint_angle, gravity, torque_motor)
                 torque_motor = self.safety_regulator.watchdog_torque_limits(torque_motor)
                 
                 flag, power, frequency = self.safety_regulator.watchdog_oscillation(torque_motor, self.rate, self.settings.get_oscillation_window_len(), self.settings.get_oscillation_corner_freq() , self.settings.get_oscillation_power_limit())
-                self.settings.set_control_flag(flag)
+                #
+                if flag == False:
+                    self.settings.set_control_flag(flag)
                 self.publish_oscillation(power, frequency, self._pub_oscillation)
 
                 ### DISABLE cuff and gravitation compensation and PUBLISH debug values
@@ -428,7 +435,7 @@ class controller():
                 self._pub_gc_disable.publish()
 
                 self.publish_error(joint_velocity_error, cur_joint_velocity,self._pub_joint_velocity)
-
+                self.publish_joint_torques(torque_motor, self._pub_debug_torque_motor)
                 ### CONVERT controller output in msg format dictionary
 
                 torque_motor_dict = self.list2dictionary(torque_motor, self.robot_dyn_kin.get_joint_names())

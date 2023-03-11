@@ -32,8 +32,8 @@ class Robot_dynamic_kinematic_server():
         ########## Robot initialisation ##########
         # Instance Robotic Chain
         # TODO Put in seperate script dyn/kin in script (robot_dyn_kin.py)
-        # urdf_filepath = os.path.abspath(os.path.join(os.path.abspath(__file__), os.pardir, os.pardir, os.pardir, 'sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'))
-        urdf_filepath = '/home/nilssichert/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'
+        urdf_filepath = os.path.abspath(os.path.join(os.path.abspath(__file__), os.pardir, os.pardir, os.pardir, 'sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'))
+        #urdf_filepath = '/home/nilssichert/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()

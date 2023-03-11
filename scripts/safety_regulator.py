@@ -46,28 +46,31 @@ class Safety_regulator():
     
     def watchdog_torque_limits(self, motor_torques):
         motor_torques = self.clip_joints_effort_safe(motor_torques)
-        return motor_torques
+        saturation = np.max((self.joint_efforts_limit_upper - np.abs(np.abs(motor_torques)-self.joint_efforts_limit_upper))/self.joint_efforts_limit_upper)
+        return motor_torques, saturation
     
-    def watchdog_oscillation(self, motor_torques, rate, oscillation_observer_window_length, oscillation_frequency, oscillation_power):
-        motor_torques = np.atleast_2d(motor_torques).T
+    def watchdog_oscillation(self, oscillation_param, rate, oscillation_observer_window_length, oscillation_frequency, oscillation_power):
+        oscillation_param = np.atleast_2d(oscillation_param)
         flag = True
-        power = [0]
-        frequency = [0]
+        power = [0]*len(oscillation_param)
+        frequency = [0]*len(oscillation_param)
         tmp = np.delete(self.oscillation_window,1,1)
         if self.oscillation_observer_activ == False:
             self.counter += 1
-        self.oscillation_window = np.concatenate((tmp, motor_torques), axis=1)
+        self.oscillation_window = np.concatenate((tmp, oscillation_param), axis=1)
         if self.counter >= oscillation_observer_window_length + 1:
-            for j in range(len(motor_torques)): 
+            for j in range(len(oscillation_param)): 
                 signal = self.oscillation_window[j,:]
-                power = np.abs(np.fft.rfft(signal))
-                length_power = len(power)
-                frequency = np.linspace(0, rate/2, length_power)
+                power_tmp = np.abs(np.fft.rfft(signal))
+                length_power = len(power_tmp)
+                frequency_tmp = np.linspace(0, rate/2, length_power)
+                power[j] = power_tmp
+                frequency[j] = frequency_tmp
                 
                 for i in range(length_power):
-                    f_tmp = frequency[i]
+                    f_tmp = frequency_tmp[i]
                     if f_tmp >= oscillation_frequency:
-                        if np.abs(power[i]) >= oscillation_power:
+                        if np.abs(power_tmp[i]) >= oscillation_power:
                             flag = False
                             print("[Saftey regulator]: Oscillation shutdown at joint: ", j)
                             print("[Safety regulator]: Please control values for stifness and damping.")

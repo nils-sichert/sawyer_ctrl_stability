@@ -6,7 +6,7 @@ import rospy
 import numpy as np
 from sensor_msgs.msg import JointState, PointCloud
 from geometry_msgs.msg import Point32
-from std_msgs.msg import Empty, Header
+from std_msgs.msg import Empty, Header, String
 from intera_core_msgs.msg import JointLimits, SEAJointState
 import sys, os
 import tf.transformations as tft
@@ -20,6 +20,8 @@ from scipy.spatial.transform import Rotation as R
 
 from matplotlib import pyplot as plt
 from matplotlib import animation
+
+import cProfile
 
 
 """
@@ -51,6 +53,7 @@ class controller():
         self.impedance_ctrl_simple = spring_damper_jointspace()
         self.PD_impedance_jointspace  = pd_impedance_jointspace()
 
+        self.pr = cProfile.Profile()
         # Safety and Watchguard
         joint_angle_limit_upper, joint_angle_limit_lower = self.robot_dyn_kin.get_joint_limits()
         joint_effort_limit_upper, joint_effort_limit_lower = self.robot_dyn_kin.get_torque_limits()
@@ -72,7 +75,12 @@ class controller():
         ### Debug Publisher ###
         self._pub_error = rospy.Publisher('/control_node_debug/EE_Pose_Error', JointState, queue_size=1)
         self._pub_joint_velocity = rospy.Publisher('/control_node_debug/joint_velocity', JointState, queue_size=1)
-        self._pub_oscillation = rospy.Publisher('/control_node_debug/oscillation_joint1', PointCloud, queue_size=1)
+        self._pub_oscillation = [None]*7 #TODO delete hardcode
+        for index, value in enumerate(joint_effort_limit_upper.T):
+            topic = '/control_node_debug/oscillation_joint/' + str(index)
+            self._pub_oscillation[index] = rospy.Publisher(topic, JointState, queue_size=1)
+        
+        self._pub_lightcolor = rospy.Publisher('control_node_debug/color', String, queue_size=1)
 
         self.rate = 100 # Control rate
 
@@ -86,29 +94,21 @@ class controller():
 
     ############ Publisher (Debugpurpose) ############ 
 
-    def publish_error(self, error_pos, error_vel, publisher: rospy.Publisher):
+    def publish_jointstate(self, position, velocity, publisher: rospy.Publisher):
         """
         Publishs position and velocity error of endeffector.
         Parameters: position error (6x1, 'error_pos), velocity error (6x1, 'error_vel)
         Returns: publisher.publish()
         """
         msg = JointState()
-        msg.position = error_pos
-        msg.velocity = error_vel
-        publisher.publish(msg)
-    
-    def publish_oscillation(self, power, frequency, publisher: rospy.Publisher):
-        msg = PointCloud()
-        #filling pointcloud header
-        header = Header()
-        header.stamp = rospy.Time.now()
-        header.frame_id = 'world'
-        msg.header = header
-        for i in range(len(power)):
-            msg.points.append(Point32(frequency[i],power[i],0))
+        msg.position = position
+        msg.velocity = velocity
         publisher.publish(msg)
 
-
+    def publish_head_light_color(self, string, publisher: rospy.Publisher):
+        msg = String()
+        msg.data = string
+        publisher.publish(msg)
 
     ############ Update States/ Variables ############ 
 
@@ -317,6 +317,17 @@ class controller():
             list_tmp[i] = pose_list[i][0]
         self.settings.set_cartesian_pose_desired(list_tmp)
 
+    def set_headlight_color(self, saturation):
+        if saturation >= 0.95:
+            msg = "red"
+            self.publish_head_light_color(msg, self._pub_lightcolor)
+        elif 0.75 <= saturation <0.95:
+            msg = "yellow"
+            self.publish_head_light_color(msg, self._pub_lightcolor)
+        else:
+            msg = "green"
+            self.publish_head_light_color(msg, self._pub_lightcolor)
+
     ############ Control loop ############ 
 
     def clean_shutdown(self):
@@ -370,6 +381,8 @@ class controller():
         print("[Control_node]: Own controlloop is working: ", self.settings.get_control_flag())
         print("[Control_node]: If false, too turn on set rosparam to true.")
         while not rospy.is_shutdown():
+            # self.pr.enable()
+
 
             ### UPDATE current robot state ###
             self.robot_dyn_kin.update_robot_states(self.get_periodTime())
@@ -417,24 +430,30 @@ class controller():
                 
                 ### Safety Regulator
                 torque_motor = self.safety_regulator.watchdog_joint_limits_torque_control(cur_joint_angle, gravity, torque_motor)
-                torque_motor = self.safety_regulator.watchdog_torque_limits(torque_motor)
+                torque_motor, saturation = self.safety_regulator.watchdog_torque_limits(torque_motor)
                 
-                flag, power, frequency = self.safety_regulator.watchdog_oscillation(torque_motor, self.rate, self.settings.get_oscillation_window_len(), self.settings.get_oscillation_corner_freq() , self.settings.get_oscillation_power_limit())
+                flag, power, frequency = self.safety_regulator.watchdog_oscillation(cur_joint_velocity, self.rate, self.settings.get_oscillation_window_len(), self.settings.get_oscillation_corner_freq() , self.settings.get_oscillation_power_limit())
                 self.settings.set_control_flag(flag)
-                self.publish_oscillation(power, frequency, self._pub_oscillation)
+                for i in range(len(torque_motor)):
+                    power_tmp = power[i]
+                    frequency_tmp = frequency[i]
+                    self.publish_jointstate(frequency_tmp, power_tmp, self._pub_oscillation[i])
 
                 ### DISABLE cuff and gravitation compensation and PUBLISH debug values
                 self._pub_cuff_disable.publish()  # TODO cuff disable/ enable by default / maybe FLAG script
                 self._pub_gc_disable.publish()
 
-                self.publish_error(joint_velocity_error, cur_joint_velocity,self._pub_joint_velocity)
-
+                self.publish_jointstate(joint_velocity_error, cur_joint_velocity,self._pub_joint_velocity)
+                self.set_headlight_color(saturation)
                 ### CONVERT controller output in msg format dictionary
 
                 torque_motor_dict = self.list2dictionary(torque_motor, self.robot_dyn_kin.get_joint_names())
 
                 ### PUBLISH Joint  torques
                 self.robot_dyn_kin.set_joint_torques(torque_motor_dict)
+
+                # self.pr.disable()
+                # self.pr.print_stats(sort='time')  
             
             rospy.Rate(self.rate).sleep()
         self.clean_shutdown()

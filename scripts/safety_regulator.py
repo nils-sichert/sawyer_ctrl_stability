@@ -54,8 +54,8 @@ class Safety_regulator():
     def watchdog_oscillation(self, oscillation_param, rate, oscillation_observer_window_length, oscillation_frequency, oscillation_power):
         oscillation_param = np.atleast_2d(oscillation_param)
         flag = True
-        power = [0]*len(oscillation_param)
-        frequency = [0]*len(oscillation_param)
+        power = [[0]]*len(oscillation_param)
+        frequency = [[0]]*len(oscillation_param)
         tmp = np.delete(self.oscillation_window,1,1)
         if self.oscillation_observer_activ == False:
             self.counter += 1

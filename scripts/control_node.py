@@ -32,7 +32,7 @@ TODO improve cartesian pose getter and setter
 """
 
 class controller():
-    def __init__(self, limb = "right", ControlStartStop = False, joint_angle_desired = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40],
+    def __init__(self, limb = "right", ControlStartStop = True, joint_angle_desired = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40],
                  joint_velocity_desired = [0, 0, 0, 0, 0, 0, 0], controlState = 3, joint_stiffness = [20], joint_damping = [1], neutral_pose = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40], move2neutral = False):
         
         print("Initializing node...")
@@ -90,6 +90,9 @@ class controller():
         self.timestamp_t_1 = 0
         self.Kd = None
         self.Dd = None
+
+        self.set_initalstate(self.robot_dyn_kin.get_current_joint_angles_list())
+        self.set_cartesian_inital_pose(self.robot_dyn_kin.get_current_cartesian_pose())
 
 
     ############ Publisher (Debugpurpose) ############ 

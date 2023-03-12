@@ -23,7 +23,7 @@ class calback():
         self.ydata_5 = 0
         self.xdata_6 = 0
         self.ydata_6 = 0
-        self.fig = plt.figure()
+        self.fig = plt.figure('Velocity Oscillation FFT')
         self.ax0 = self.fig.add_subplot(2,4,1)
         self.ax0.set_xlabel('Frequency [Hz]')
         self.ax0.set_ylabel('Magnitude')
@@ -126,6 +126,27 @@ class calback():
         self.ax5.scatter(x5, y5)
         self.ax6.scatter(x6, y6)
 
+        self.ax0.set_xlabel('Frequency [Hz]')
+        self.ax0.set_ylabel('Magnitude')
+        self.ax0.set_title('Joint 0')
+        self.ax1.set_xlabel('Frequency [Hz]')
+        self.ax1.set_ylabel('Magnitude')
+        self.ax1.set_title('Joint 1')
+        self.ax2.set_xlabel('Frequency [Hz]')
+        self.ax2.set_ylabel('Magnitude')
+        self.ax2.set_title('Joint 2')
+        self.ax3.set_xlabel('Frequency [Hz]')
+        self.ax3.set_ylabel('Magnitude')
+        self.ax3.set_title('Joint 3')
+        self.ax4.set_xlabel('Frequency [Hz]')
+        self.ax4.set_ylabel('Magnitude')
+        self.ax4.set_title('Joint 4')
+        self.ax5.set_xlabel('Frequency [Hz]')
+        self.ax5.set_ylabel('Magnitude')
+        self.ax5.set_title('Joint 5')
+        self.ax6.set_xlabel('Frequency [Hz]')
+        self.ax6.set_ylabel('Magnitude')
+        self.ax6.set_title('Joint 6')
 
     def run(self):         
         ani = animation.FuncAnimation(self.fig, self.animate, interval=100)

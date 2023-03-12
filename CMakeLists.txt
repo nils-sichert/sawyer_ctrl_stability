@@ -161,10 +161,12 @@ include_directories(
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
-  scripts/controller_node.py
-  scripts/DLR_impedance_cartesian.py
-  scripts/PD_impedance_jointspace.py
-  scripts/Spring_damper_jointspace.py
+  scripts/control_node.py
+  scripts/cartesianspace_controller.py
+  scripts/jointspace_controller.py
+  scripts/robot_dyn_kin_server.py
+  scripts/safety_regulator.py
+  scripts/setting_server.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 

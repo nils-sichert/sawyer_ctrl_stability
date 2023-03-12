@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
@@ -23,12 +25,26 @@ class calback():
         self.ydata_6 = 0
         self.fig = plt.figure()
         self.ax0 = self.fig.add_subplot(2,4,1)
+        self.ax0.set_xlabel('Frequency [Hz]')
+        self.ax0.set_ylabel('Magnitude')
         self.ax1 = self.fig.add_subplot(2,4,2)
+        self.ax1.set_xlabel('Frequency [Hz]')
+        self.ax1.set_ylabel('Magnitude')
         self.ax2 = self.fig.add_subplot(2,4,3)
+        self.ax2.set_xlabel('Frequency [Hz]')
+        self.ax2.set_ylabel('Magnitude')
         self.ax3 = self.fig.add_subplot(2,4,4)
+        self.ax3.set_xlabel('Frequency [Hz]')
+        self.ax3.set_ylabel('Magnitude')
         self.ax4 = self.fig.add_subplot(2,4,5)
+        self.ax4.set_xlabel('Frequency [Hz]')
+        self.ax4.set_ylabel('Magnitude')
         self.ax5 = self.fig.add_subplot(2,4,6)
+        self.ax5.set_xlabel('Frequency [Hz]')
+        self.ax5.set_ylabel('Magnitude')
         self.ax6 = self.fig.add_subplot(2,4,7)
+        self.ax6.set_xlabel('Frequency [Hz]')
+        self.ax6.set_ylabel('Magnitude')
 
         rospy.init_node("ftt_plot", anonymous=True)
         method_ls = [self.callback_0, self.callback_1, self.callback_2, self.callback_3, self.callback_4, self.callback_5, self.callback_6]

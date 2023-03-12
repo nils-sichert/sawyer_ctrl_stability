@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-#!/usr/bin/env python3
         
 import rospy
 import numpy as np
@@ -17,6 +16,8 @@ from setting_server import Setting_server
 from robot_dyn_kin_server import Robot_dynamic_kinematic_server
 from safety_regulator import Safety_regulator
 from scipy.spatial.transform import Rotation as R
+
+from intera_interface import Lights
 
 from matplotlib import pyplot as plt
 from matplotlib import animation
@@ -45,6 +46,9 @@ class controller():
 
         # Robot
         self.robot_dyn_kin = Robot_dynamic_kinematic_server(limb)
+        self.light = Lights()
+        rospy.loginfo("All available lights on this robot:\n{0}\n".format(
+                                               ', '.join(self.light.list_all_lights())))
 
         # Controller
         self.DLR_Impedance_Cartesian = dlr_impedance_cartesian()
@@ -321,15 +325,23 @@ class controller():
         self.settings.set_cartesian_pose_desired(list_tmp)
 
     def set_headlight_color(self, saturation):
+        
         if saturation >= 0.95:
+            #light_name='head_red_light'
+            #self.light.set_light_state(light_name)
             msg = "red"
             self.publish_head_light_color(msg, self._pub_lightcolor)
         elif 0.75 <= saturation <0.95:
+            #light_name='head_yellow_light'
+            #self.light.set_light_state(light_name)
             msg = "yellow"
             self.publish_head_light_color(msg, self._pub_lightcolor)
         else:
+            #light_name='head_green_light'
+            #self.light.set_light_state(light_name)
             msg = "green"
             self.publish_head_light_color(msg, self._pub_lightcolor)
+
 
     ############ Control loop ############ 
 

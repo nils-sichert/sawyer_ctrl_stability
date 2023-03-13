@@ -13,7 +13,7 @@ import tf.transformations as tft
 
 from cartesianspace_controller import pd_impedance_cartesian, dlr_impedance_cartesian
 from jointspace_controller import pd_impedance_jointspace, spring_damper_jointspace
-from setting_server import Setting_server
+from configuration_server import Configuration_server
 from robot_dyn_kin_server import Robot_dynamic_kinematic_server
 from safety_regulator import Safety_regulator
 from scipy.spatial.transform import Rotation as R
@@ -34,8 +34,7 @@ TODO improve cartesian pose getter and setter
 """
 
 class controller():
-    def __init__(self, limb = "right", ControlStartStop = True, joint_angle_desired = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40],
-                 joint_velocity_desired = [0, 0, 0, 0, 0, 0, 0], controlState = 3, joint_stiffness = [20], joint_damping = [1], neutral_pose = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40], move2neutral = False):
+    def __init__(self, limb = "right"):
         
         print("Initializing node...")
 
@@ -43,7 +42,7 @@ class controller():
         
         ##### Instances ######
         # Settings
-        self.settings = Setting_server(ControlStartStop, joint_angle_desired, joint_velocity_desired, controlState,joint_stiffness, joint_damping, neutral_pose, move2neutral)
+        self.settings = Configuration_server()
 
         # Robot
         self.robot_dyn_kin = Robot_dynamic_kinematic_server(limb)
@@ -212,8 +211,6 @@ class controller():
         pitch = pose_desi[4]
         yaw = pose_desi[5]
         quat_d = np.atleast_2d(tft.quaternion_from_euler(roll, pitch, yaw)).T
-        print(quat_c)
-        print(quat_d)
         
         quat_C = Quaternion(-quat_c).conjugate
         quat_D = Quaternion(quat_d)
@@ -303,7 +300,7 @@ class controller():
         Return: statecondition (int)
         """
         statecondition = self.settings.get_Statemachine_condition()
-        if statecondition != 3 and statecondition != 4: #and statecondition != 1 and statecondition !=2:
+        if statecondition != 3 and statecondition != 4 and statecondition !=2: # and statecondition !=2:
             statecondition = 3
             self.settings.set_Statemachine_condition(3)
         return statecondition
@@ -312,7 +309,7 @@ class controller():
         return np.atleast_2d(self.settings.get_cartesian_pose_desired())
         
     def set_initalstate(self, current_joint_angle):
-        rospy.set_param("control_node/joint_angle_desi", current_joint_angle)
+        rospy.set_param("control_node/joint_angle_desired", current_joint_angle)
         
     def set_cartesian_inital_pose(self, pose):
         list_tmp = [0,0,0,0,0,0]
@@ -329,9 +326,9 @@ class controller():
             msg = "red"
             self.publish_head_light_color(msg, self._pub_lightcolor)
         elif 0.75 <= saturation <0.95:
-            #light_name='head_yellow_light'
+            #light_name='head_blue_light'
             #self.light.set_light_state(light_name)
-            msg = "yellow"
+            msg = "blue"
             self.publish_head_light_color(msg, self._pub_lightcolor)
         else:
             #light_name='head_green_light'
@@ -349,13 +346,13 @@ class controller():
         print("\nExiting Control node...")
         self.robot_dyn_kin.clean_shutdown()
 
-    def run_statemachine(self, statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, Kd, Dd, periodTime, coriolis, inertia, gravity, jacobian, djacobian, cartesian_pose_error, cartesian_velocity_error, cartesian_acceleration):
+    def run_statemachine(self, statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, Kd, Dd, periodTime, coriolis, mass, gravity, jacobian, djacobian, cartesian_pose_error, cartesian_velocity_error, cartesian_acceleration):
         """
         Statemachine is shifting between different control algorithms. The statecondition is a Ros parameter and can therefore be changed 
             while running the loop. Also, the method get_statecondition can be used to implement a switch condition or a switch observer.
         Parameters: statecondition (int),  current joint angle (7x1), current joint velocity (7x1),  current pose error (6x1), 
             current velocity error (6x1), joint angle error (7x1), joint velocity error (7x1), acceleration ddx (6x1), 
-            stiffness matrix Kd (7x7), sampling time (float), coriolis vecotr (7x1), inertia matrix (7x7), gravity vector (7x1),
+            stiffness matrix Kd (7x7), sampling time (float), coriolis vecotr (7x1), mass matrix (7x7), gravity vector (7x1),
             jacobian matrix (6x7), derivative of jacobian - djacobian (6x7)
         Return: List of control torques for the motor (7x1)
         TODO clear names of controller
@@ -363,13 +360,21 @@ class controller():
         
         if statecondition == 1: # State 1: DLR impedance controller - cartesian space (Source DLR: Alin Albu-Schäffer )
             Kd = Kd[:6,:6]
-            motor_torque = self.DLR_Impedance_Cartesian.calc_joint_torque(Kd, cartesian_acceleration, cur_joint_angle, cur_joint_velocity, cartesian_pose_error, cartesian_velocity_error,  inertia, coriolis, jacobian, djacobian, gravity, periodTime)
+            motor_torque = self.DLR_Impedance_Cartesian.calc_joint_torque(Kd, cartesian_acceleration, cur_joint_angle, cur_joint_velocity, cartesian_pose_error, cartesian_velocity_error,  mass, coriolis, jacobian, djacobian, gravity, periodTime)
             return motor_torque
         
         elif statecondition == 2: # State 2: PD impedance controller - cartesian space 
             Kd = Kd[:6,:6]
             Dd = Dd[:6,:6]
-            motor_torque = self.PD_impedance_cartesian.calc_joint_torque(Kd, Dd, cartesian_pose_error, cartesian_velocity_error, coriolis, jacobian, gravity)
+            Kn = np.identity(7)*30 # positiv definite stiffness matrix - 7x7 matrix
+            Dn = np.identity(7)*1 # positiv definite damping matrix - 7x7 matrix
+            qn = np.atleast_2d(np.array([-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40])).T # desired joint configuration of arm at nullspace - 7x1 vector
+            if self.settings.get_nullspace_is_free() == True: # free Nullspace
+                qn = cur_joint_angle
+            else:
+                #qn = self.settings.get_nullspace_pose()
+                qn = np.atleast_2d(np.array([-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40])).T
+            motor_torque = self.PD_impedance_cartesian.calc_joint_torque(Kd, Dd, Kn, Dn, qn, cartesian_pose_error, cartesian_velocity_error, coriolis, jacobian, gravity, cur_joint_velocity, cur_joint_angle)
             return motor_torque
 
         elif statecondition == 3: # State 3: Spring/Damper impedance controller - jointspace
@@ -420,7 +425,7 @@ class controller():
                 ### GET current robot state ###
                 cur_joint_angle = self.robot_dyn_kin.get_current_joint_angles()         # numpy 7x1
                 cur_joint_velocity = self.robot_dyn_kin.get_current_joint_velocities()  # numpy 7x1
-                inertia = self.robot_dyn_kin.get_inertia()    # numpy 7x7 
+                mass = self.robot_dyn_kin.get_mass()    # numpy 7x7 
                 gravity = self.robot_dyn_kin.get_gravity_compensation()  # numpy 7x1 
                 jacobian = self.robot_dyn_kin.get_jacobian()  # numpy 6x7 
                 djacobian = self.robot_dyn_kin.get_djacobian()
@@ -438,7 +443,7 @@ class controller():
                 cartesian_acceleration = self.robot_dyn_kin.get_cartesian_acceleration_EE()
                 
                 torque_motor = self.run_statemachine(statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, Kd, Dd, periodTime, 
-                                                     coriolis, inertia, gravity, jacobian, djacobian, cartesian_pose_error, cartesian_velocity_error, cartesian_acceleration)
+                                                     coriolis, mass, gravity, jacobian, djacobian, cartesian_pose_error, cartesian_velocity_error, cartesian_acceleration)
                 
                 ### Safety Regulator
                 torque_motor = self.safety_regulator.watchdog_joint_limits_torque_control(cur_joint_angle, gravity, torque_motor)

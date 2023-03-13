@@ -126,15 +126,15 @@ class Robot_dynamic_kinematic_server():
         self.dyn_kdl.JntToCoriolis(self.joints_to_kdl('positions',joint_angles), self.joints_to_kdl('velocities',joint_velocities), coriolis_torques)	# C(q, q_dot)
         return np.atleast_2d(self.array_kdl_to_list(coriolis_torques))
 
-    def calc_inertia(self, joint_values=None):
+    def calc_mass(self, joint_values=None):
         """
         Calculation of intertia matrix based on the joint_angle.
         Parameters: joint angles (7x1)
         Return: inertia matrix (7x7)
         """
-        inertia = kdl.JntSpaceInertiaMatrix(self._nrOfJoints)
-        self.dyn_kdl.JntToMass(self.joints_to_kdl('positions',joint_values), inertia)
-        return np.atleast_2d(self.kdl_to_mat(inertia))
+        mass = kdl.JntSpaceInertiaMatrix(self._nrOfJoints)
+        self.dyn_kdl.JntToMass(self.joints_to_kdl('positions',joint_values), mass)
+        return np.atleast_2d(self.kdl_to_mat(mass))
 
     def calc_gravity(self, joint_values=None):
         """
@@ -271,8 +271,8 @@ class Robot_dynamic_kinematic_server():
     def get_coriolis(self):
         return self.calc_coriolis().T
 
-    def get_inertia(self):
-        return self.calc_inertia()
+    def get_mass(self):
+        return self.calc_mass()
 
     def get_gravity_compensation(self):
         return self.calc_gravity().T
@@ -386,7 +386,7 @@ def main():
     print(robot_dyn_kin_server.get_jacobian())
     print(robot_dyn_kin_server.get_jacobian_prev())
     print(robot_dyn_kin_server.get_coriolis())
-    print(robot_dyn_kin_server.get_inertia())
+    print(robot_dyn_kin_server.get_mass())
     print(robot_dyn_kin_server.get_gravity_compensation())
     print(robot_dyn_kin_server.get_current_joint_angles())
     print(robot_dyn_kin_server.get_current_joint_velocities())

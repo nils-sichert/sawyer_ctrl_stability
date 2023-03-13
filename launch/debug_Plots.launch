@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+  <node name="rqt_gui" pkg="rqt_gui" type="rqt_gui" />
+  <!-- Start the Sawyer pick and place demo -->
+  <node pkg="sawyer_ctrl_stability" type="oscillation_monitor.py" name="oscillation_monitor" />
+
+</launch>

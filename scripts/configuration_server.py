@@ -1,42 +1,23 @@
 #!/usr/bin/env python3
 import rospy
 
-class Setting_server():
-    def __init__(self, ControlStartStop, joint_angle_desired, joint_velocity_desired, statemachine_condition,joint_stiffness, joint_damping, neutral_pose, move2neutral, cartesian_pose = [0,0,0,0,0,0], window_length = 50, corner_frequency = 20, power_limit = 40):
-        # rospy.init_node('setting_server', anonymous=True)
-
-        # Set inital parameters # 
-
-        rospy.set_param("control_node/control_flag", ControlStartStop)
-        rospy.set_param("control_node/joint_angle_desi", joint_angle_desired)
-        rospy.set_param("control_node/joint_velocity_desi", joint_velocity_desired)
-        rospy.set_param("control_node/statemachine_condition", statemachine_condition)
-        rospy.set_param("control_node/Kd", joint_stiffness)
-        rospy.set_param("control_node/Dd", joint_damping)
-        rospy.set_param("named_poses/right/poses/neutral", neutral_pose)
-        rospy.set_param("control_node/Lowpass_coeff", 0.6)
-        rospy.set_param("control_node/move2neutral", move2neutral)
-        rospy.set_param("control_node/oscillation_window_len", window_length)
-        rospy.set_param("control_node/oscillation_corner_freq", corner_frequency)
-        rospy.set_param("control_node/oscillation_power_limit", power_limit)
-        rospy.set_param("control_node/cartesian_pose_desired", cartesian_pose)
-
-       
-
+class Configuration_server():
+    def __init__(self):
+        pass
 
     ######## Getter Methods ########
 
     def get_control_flag(self):
-        return rospy.get_param("control_node/control_flag")
+        return rospy.get_param("control_node/control_is_on")
         
     def get_joint_angle_desired(self):
-        return rospy.get_param("control_node/joint_angle_desi")
+        return rospy.get_param("control_node/joint_angle_desired")
     
     def get_joint_velocity_desired(self):
-        return rospy.get_param("control_node/joint_velocity_desi")
+        return rospy.get_param("control_node/joint_velocity_desired")
     
     def get_Statemachine_condition(self):
-        return rospy.get_param("control_node/statemachine_condition")
+        return rospy.get_param("control_node/selected_filter_number")
     
     def get_stiffness(self):
         return rospy.get_param("control_node/Kd")
@@ -54,31 +35,36 @@ class Setting_server():
         return rospy.get_param("control_node/move2neutral")
     
     def get_oscillation_window_len(self):
-        return rospy.get_param("control_node/oscillation_window_len")
+        return rospy.get_param("oscillation_guard/window_length")
     
     def get_oscillation_corner_freq(self):
-        return rospy.get_param("control_node/oscillation_corner_freq")
+        return rospy.get_param("oscillation_guard/corner_frequency")
         
     def get_oscillation_power_limit(self):    
-        return rospy.get_param("control_node/oscillation_power_limit")
+        return rospy.get_param("oscillation_guard/magnitude_limit")
     
     def get_cartesian_pose_desired(self):
         return rospy.get_param("control_node/cartesian_pose_desired")
 
+    def get_nullspace_is_free(self):
+        return rospy.get_param("nullspace/is_free")
+    
+    def get_nullspace_pose(self):
+        return rospy.get_param("nullspace/jointspace_pose")
 
     ######## Setter Methods ########
 
     def set_control_flag(self, controlFlag):
-        return rospy.set_param("control_node/control_flag", controlFlag)
+        return rospy.set_param("control_node/control_is_on", controlFlag)
         
     def set_joint_angle_desired(self, joint_angle_desired):
-        return rospy.set_param("control_node/joint_angle_desi", joint_angle_desired)
+        return rospy.set_param("control_node/joint_angle_desired", joint_angle_desired)
     
     def set_joint_velocity_desired(self, joint_velocity_desired):
-        return rospy.set_param("control_node/joint_velocity_desi", joint_velocity_desired)
+        return rospy.set_param("control_node/joint_velocity_desired", joint_velocity_desired)
     
     def set_Statemachine_condition(self, statemachine_condition):
-        return rospy.set_param("control_node/Statemachine_condition", statemachine_condition)
+        return rospy.set_param("control_node/selected_filter_number", statemachine_condition)
     
     def set_stiffness(self, joint_stiffness):
         return rospy.set_param("control_node/Kd", joint_stiffness)
@@ -96,13 +82,13 @@ class Setting_server():
         return rospy.set_param("control_node/move2neutral", Flag)
     
     def set_oscillation_window_len(self, length):
-        return rospy.set_param("control_node/oscillation_window_len", length)
+        return rospy.set_param("oscillation_guard/window_length", length)
     
     def set_oscillation_corner_freq(self, frequency):
-        return rospy.set_param("control_node/oscillation_corner_freq", frequency)
+        return rospy.set_param("oscillation_guard/magnitude_limit", frequency)
         
     def set_oscillation_power_limit(self, limit):    
-        return rospy.set_param("control_node/oscillation_power_limit", limit)
+        return rospy.set_param("oscillation_guard/magnitude_limit", limit)
     
     def set_cartesian_pose_desired(self, pose):
         return rospy.set_param("control_node/cartesian_pose_desired", pose)

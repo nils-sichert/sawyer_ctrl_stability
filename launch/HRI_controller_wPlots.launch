@@ -6,4 +6,7 @@
   <!-- Start the Sawyer pick and place demo -->
   <node pkg="sawyer_ctrl_stability" type="control_node.py" name="control_node" />
 
+  <include file="$(find sawyer_ctrl_stability)/launch/debug_Plots.launch">
+  </include>
+
 </launch>

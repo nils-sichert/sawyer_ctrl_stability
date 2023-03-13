@@ -166,7 +166,7 @@ catkin_install_python(PROGRAMS
   scripts/jointspace_controller.py
   scripts/robot_dyn_kin_server.py
   scripts/safety_regulator.py
-  scripts/setting_server.py
+  scripts/configuration_server.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 

@@ -64,21 +64,27 @@ class controller():
         self.safety_regulator = Safety_regulator(joint_angle_limit_upper, joint_angle_limit_lower, joint_effort_limit_upper, joint_effort_limit_lower, self.settings.get_oscillation_window_len(), self.settings.get_oscillation_corner_freq(),self.settings.get_oscillation_power_limit() )
 
         ### Publisher ###
-        # create cuff disable publisher
+        # create publisher to suppress cuff 
         cuff_ns = 'robot/limb/' + limb + '/suppress_cuff_interaction'
         self._pub_cuff_disable = rospy.Publisher(cuff_ns, Empty, queue_size=1)
 
-        # create publisher to disable default gravity compensation
+        # create publisher to suppress default gravity compensation
         gc_ns = 'robot/limb/' + limb + '/suppress_gravity_compensation'
         self._pub_gc_disable = rospy.Publisher(gc_ns, Empty, queue_size=1)
 
-        # create publisher to disable collision avoidance
-        # coll_ns = 'robot/limb/' + limb + '/suppress_' TODO find topic
+        # create publisher to suppress self collision detection
+        sc_ns = 'robot/limb/' + limb + '/suppress_contact_safety'
+        self._pub_self_collision_disable = rospy.Publisher(sc_ns, Empty, queue_size=1)
+
+        # create publisher to suppress contac collision detection
+        cc_ns = 'robot/limb/' + limb + '/suppress_collision_avoidance'
+        self._pub_contact_collision_disable = rospy.Publisher(cc_ns, Empty, queue_size=1)
 
         
         ### Debug Publisher ###
         self._pub_error = rospy.Publisher('/control_node_debug/EE_Pose_Error', JointState, queue_size=1)
         self._pub_joint_velocity = rospy.Publisher('/control_node_debug/joint_velocity', JointState, queue_size=1)
+        
         self._pub_oscillation = [None]*7 #TODO delete hardcode
         for index, value in enumerate(joint_effort_limit_upper.T):
             topic = '/control_node_debug/oscillation_joint/' + str(index)
@@ -459,6 +465,10 @@ class controller():
                 ### DISABLE cuff and gravitation compensation and PUBLISH debug values
                 self._pub_cuff_disable.publish()  # TODO cuff disable/ enable by default / maybe FLAG script
                 self._pub_gc_disable.publish()
+                if self.settings.get_self_collision_is_disabled() == True:
+                    self._pub_self_collision_disable.publish()
+                if self.settings.get_contact_collision_disabled() == True:
+                    self._pub_contact_collision_disable.publish()
 
                 self.publish_jointstate(joint_velocity_error, cur_joint_velocity,self._pub_joint_velocity)
                 self.set_headlight_color(saturation)

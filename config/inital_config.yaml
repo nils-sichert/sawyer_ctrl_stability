@@ -8,6 +8,8 @@ control_node: {
   Dd: [1],
   Lowpass_coeff: 0.6,
   move2neutral: false,
+  suppress_self_collision_detection: false,
+  suppress_contact_collision_detection: false,
 }
 
 oscillation_guard: {

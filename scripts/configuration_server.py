@@ -52,6 +52,12 @@ class Configuration_server():
     def get_nullspace_pose(self):
         return rospy.get_param("nullspace/jointspace_pose")
 
+    def get_self_collision_is_disabled(self):
+        return rospy.get_param("control_node/suppress_self_collision_detection")
+
+    def get_contact_collision_disabled(self):
+        return rospy.get_param("control_node/suppress_contact_collision_detection")
+
     ######## Setter Methods ########
 
     def set_control_flag(self, controlFlag):

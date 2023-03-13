@@ -8,6 +8,7 @@ class pd_impedance_cartesian():
         pass
 
     def calc_joint_torque(self, Kd, Dd, cartesian_pose_error, cartesian_velocity_error, coriolis, jacobian, gravity):
+        
         tau_d = jacobian.T @ (-Kd @ cartesian_pose_error - Dd @ cartesian_velocity_error) + coriolis + gravity
         return self.vec2list(tau_d)
         

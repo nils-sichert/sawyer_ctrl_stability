@@ -2,6 +2,7 @@
 
         
 import rospy
+from pyquaternion import Quaternion
 import numpy as np
 from sensor_msgs.msg import JointState, PointCloud
 from geometry_msgs.msg import Point32
@@ -211,15 +212,17 @@ class controller():
         pitch = pose_desi[4]
         yaw = pose_desi[5]
         quat_d = np.atleast_2d(tft.quaternion_from_euler(roll, pitch, yaw)).T
-        quat_c_vec = np.atleast_2d(quat_c[1:,0]).T
-        quat_d_vec = np.atleast_2d(quat_d[1:,0]).T
-        cross = np.atleast_2d(self.cross(quat_d_vec, quat_c_vec))
-        quat_err =  quat_d[0,0] * quat_c_vec - quat_c[0,0] * quat_d_vec + cross
+        print(quat_c)
+        print(quat_d)
+        
+        quat_C = Quaternion(-quat_c).conjugate
+        quat_D = Quaternion(quat_d)
 
-        error_pose = np.atleast_2d(np.concatenate((error_position, quat_err)))
+        err = quat_C*quat_D
+        rot_err = np.atleast_2d(err.elements[1:]).T
+        error_pose = np.atleast_2d(np.concatenate((error_position, rot_err)))
         
         # Velocity error
-        # TODO check sign
         velocity_desired = np.atleast_2d(velocity_desired).T
         error_velocity = jacobian * current_joint_velocity - velocity_desired
 
@@ -248,12 +251,6 @@ class controller():
             for i in range(len(y_t)):
                 y[i] = (1-self.settings.get_lowpass_coeff())*y_t_1[i]+self.settings.get_lowpass_coeff()*y_t[i]
         return y
-   
-    def cross(self, a,b):
-        cross = [a[1]*b[2] - a[2]*b[1],
-            a[2]*b[0] - a[0]*b[2],
-            a[0]*b[1] - a[1]*b[0]]
-        return cross
 
     ############ Format converter (KDL/Numpy, List/Dict) ############ 
     

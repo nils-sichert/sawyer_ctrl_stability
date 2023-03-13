@@ -18,8 +18,6 @@ from robot_dyn_kin_server import Robot_dynamic_kinematic_server
 from safety_regulator import Safety_regulator
 from scipy.spatial.transform import Rotation as R
 
-from intera_interface import Lights
-
 from matplotlib import pyplot as plt
 from matplotlib import animation
 
@@ -46,10 +44,7 @@ class controller():
 
         # Robot
         self.robot_dyn_kin = Robot_dynamic_kinematic_server(limb)
-        self.light = Lights()
-        rospy.loginfo("All available lights on this robot:\n{0}\n".format(
-                                               ', '.join(self.light.list_all_lights())))
-
+        
         # Controller
         self.DLR_Impedance_Cartesian = dlr_impedance_cartesian()
         self.PD_impedance_cartesian = pd_impedance_cartesian()

@@ -5,5 +5,6 @@
   
   <!-- Start the Sawyer pick and place demo -->
   <node pkg="sawyer_ctrl_stability" type="control_node.py" name="control_node" />
+  <node pkg="sawyer_ctrl_stability" type="head_light_manager.py" name="head_light_manager" />
 
 </launch>

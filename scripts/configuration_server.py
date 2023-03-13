@@ -101,8 +101,7 @@ class Configuration_server():
 
     
 def main():
-    settings = Setting_server(ControlStartStop = False, joint_angle_desired = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40],
-                 joint_velocity_desired = [0, 0, 0, 0, 0, 0, 0], statemachine_condition = 3, joint_stiffness = [20], joint_damping = [1], neutral_pose = [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40])
+    settings = Configuration_server()
     print("Finished.")
 
 if __name__ == "__main__":

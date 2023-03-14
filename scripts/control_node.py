@@ -34,9 +34,10 @@ TODO improve cartesian pose getter and setter
 class controller():
     def __init__(self, limb = "right"):
         
-        print("Initializing node...")
+        
 
         rospy.init_node('Control_manager', anonymous=True)
+        rospy.loginfo("[Control node]: Initializing node...")
         
         ##### Instances ######
         # Settings
@@ -81,21 +82,25 @@ class controller():
         self._pub_joint_velocity = rospy.Publisher('/control_node_debug/joint_velocity', JointState, queue_size=1)
         self._pub_joint_torques = rospy.Publisher('control_node_debug/setpoints_motor_torque', JointState, queue_size=1)
         
-        self._pub_oscillation = [None]*7 #TODO delete hardcode
+        self._pub_oscillation = [None]*7 
         for index, value in enumerate(joint_effort_limit_upper.T):
             topic = '/control_node_debug/oscillation_joint/' + str(index)
             self._pub_oscillation[index] = rospy.Publisher(topic, JointState, queue_size=1)
         
         self._pub_lightcolor = rospy.Publisher('control_node_debug/color', String, queue_size=1)
 
-        self.rate = 100 # Control rate
+        self._sub_Kd_Dd = rospy.Subscriber('/control_node/Kd_Dd', JointState, self.callback_Kd_Dd)
+
+        self.rate = 1000 # Control rate
 
         # Instance state varibles
         self.torque_motor_t_1 = [0,0,0,0,0,0,0]
         self.pose_cart = None
         self.timestamp_t_1 = 0
-        self.K_d = None
-        self.D_d = None
+        self.K_d = [1]
+        self.K_d_prev = [1]
+        self.D_d = [1]
+        self.D_d_prev = [1]
 
         self.set_initalstate(self.robot_dyn_kin.get_current_joint_angles_list())
         self.set_cartesian_inital_pose(self.robot_dyn_kin.get_current_cartesian_pose())
@@ -124,6 +129,10 @@ class controller():
         msg.data = string
         publisher.publish(msg)
 
+    def callback_Kd_Dd(self, data):
+        self.K_d = data.position
+        self.D_d = data.velocity
+
     ############ Update States/ Variables ############ 
 
     def update_parameters(self):
@@ -134,11 +143,10 @@ class controller():
         """
         K_d = self.update_K_d()
         D_d = self.update_D_d()
-        periodTime = self.get_periodTime() 
-        joint_angle_desi = np.atleast_2d(self.safety_regulator.watchdog_joint_limits_jointangle_control(self.settings.get_joint_angle_desired())).T
-        joint_velocity_desi = np.atleast_2d(np.array(self.settings.get_joint_velocity_desired())).T
+        joint_angle_desi = np.atleast_2d(self.safety_regulator.watchdog_joint_limits_jointangle_control(self.settings.get_joint_angle_desired())).T # TODO change to subscriber and Topic
+        joint_velocity_desi = np.atleast_2d(np.array(self.settings.get_joint_velocity_desired())).T # TODO change to subscriber and Topic
 
-        return K_d, D_d, periodTime, joint_angle_desi, joint_velocity_desi
+        return K_d, D_d, joint_angle_desi, joint_velocity_desi
         
     def update_K_d(self):
         """
@@ -146,25 +154,27 @@ class controller():
         Paramteres: None
         Return: K_d (7x7)
         """
-        old_K_d = self.K_d
-        tmp = self.settings.get_stiffness()
+        tmp = list(self.K_d)
         if type(tmp) is list:
             if len(tmp)==7:
                 tmp_list = [0,1,2,3,4,5,6]
                 for i in range(len(tmp)):
                     tmp_list[i] = tmp[i]
-                self.K_d = np.diag(tmp)
+                mat = np.diag(tmp)
             elif len(tmp)==1:
                 tmp = tmp[0]
-                self.K_d = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
+                mat = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
             else:
-                print('[Control node / Update KD]: Wrong input format. Update of K_d is not executed')
+                rospy.loginfo('[Control node / Update KD]: Wrong input format. Update of K_d is not executed')
         else:
-                print('[Control node / Update KD]: Wrong input format. Update of K_d is not executed')
+                rospy.loginfo('[Control node / Update KD]: Wrong input format. Update of K_d is not executed')
 
-        if not np.array_equal(old_K_d, self.K_d):
-            print('[Control node / Update KD]: New Stiffness was choosen: \n', self.K_d)
-        return self.K_d
+        # Log if new stiffness is choosen
+        # if not np.array_equal(self.K_d_prev, mat):
+        #     rospy.loginfo("[Control node / Update KD]: New Stiffness was choosen: \n{0}\n".format(mat))
+
+        self.K_d_prev = mat
+        return mat
     
     def update_D_d(self):
         """
@@ -172,32 +182,34 @@ class controller():
         Paramteres: None
         Return: K_d (7x7)
         """
-        old_D_d = self.D_d
-        tmp = self.settings.get_damping()
+        
+        tmp = list(self.D_d)
         if type(tmp) is list:
             if len(tmp)==7:
                 tmp_list = [0,1,2,3,4,5,6]
                 for i in range(len(tmp)):
                     tmp_list[i] = tmp[i]
-                self.D_d = np.diag(tmp)
+                mat = np.diag(tmp)
             elif len(tmp)==1:
                 tmp = tmp[0]
-                self.D_d = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
+                mat = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
             else:
-                print('[Control node / Update D_d]: Wrong input format. Update of D_d is not executed')
+                rospy.loginfo_once('[Control node / Update D_d]: Wrong input format. Update of D_d is not executed')
         else:
-                print('[Control node / Update D_d]: Wrong input format. Update of D_d is not executed')
+                rospy.loginfo_once('[Control node / Update D_d]: Wrong input format. Update of D_d is not executed')
 
-        if not np.array_equal(old_D_d, self.D_d):
-            print('New Damping was choosen: \n', self.D_d)
-        return self.D_d
+        # Log if new stiffness is choosen
+        # if not np.array_equal(self.D_d_prev, mat):
+        #     rospy.loginfo("[Control node / Update D_d]: New damping was choosen: \n{0}\n".format(mat))
+        
+        self.D_d_prev = mat
+        return mat
    
     def calc_error_cart(self, pose_desi, jacobian, current_joint_velocity, velocity_desired = [0,0,0,0,0,0],):
         """
         Calculation of position-, orientation-, velociteserrors and acceleration
         Parameters: position vector (3x1), rotation matrix (3x3), current velocity (6x1), desired pose (6x1)
         Return: error pose (6x1), error velocities (6x1), acceleration (6x1)
-        TODO debug Orientation error calculation
         """
         # input current pose
         tf_mat_cur = self.robot_dyn_kin.get_current_cartesian_tf()
@@ -208,16 +220,10 @@ class controller():
         error_position = np.atleast_2d([pos_x-pose_desi[0], pos_y-pose_desi[1], pos_z-pose_desi[2]])
 
         # Orientation Error
-        # calculate quaternions current position
-        # R = tft.rotation_matrix(0.123, (1, 2, 3))
-
         quat_c = np.atleast_2d(tft.quaternion_from_matrix(tf_mat_cur)).T
 
         # calculate quaternions desired position / euler sequence xyz
-        roll = pose_desi[3]
-        pitch = pose_desi[4]
-        yaw = pose_desi[5]
-        quat_d = np.atleast_2d(tft.quaternion_from_euler(roll, pitch, yaw)).T
+        quat_d = np.atleast_2d(tft.quaternion_from_euler(pose_desi[3], pose_desi[4], pose_desi[5])).T # roll. pitch, yaw
         
         quat_C = Quaternion(-quat_c).conjugate
         quat_D = Quaternion(quat_d)
@@ -248,7 +254,7 @@ class controller():
         TODO clear method, make general useable
         """
         if len(y_t) is not len(y_t_1):
-            print("Err Controller_node.py: Length of input lowpass filter is not equal.")
+            rospy.loginfo("[Control node]: Length of input lowpass filter is not equal.")
         
         else:
             y = [0]*len(y_t)
@@ -257,17 +263,6 @@ class controller():
         return y
 
     ############ Format converter (KDL/Numpy, List/Dict) ############ 
-    
-    def dictionary2list(self, dic):  
-        """
-        Transform dictionary into list.
-        Parameters: dictionary
-        Return: list
-        """
-        list_tmp = []
-        for key, value in dic.items():
-            list_tmp.append(value)
-        return list_tmp
     
     def list2dictionary(self, list, joint_names):
         """
@@ -297,6 +292,7 @@ class controller():
         else:
             period = 1/self.rate # period time in sec
         self.timestamp_t_1 = time_now    
+        #rospy.loginfo("Period Time: \n{0}\n".format(period))
         return period
        
     def get_statecondition(self):
@@ -350,7 +346,7 @@ class controller():
         """
         Clean exit of controller node
         """
-        print("\nExiting Control node...")
+        rospy.loginfo("\nExiting Control node...")
         self.robot_dyn_kin.clean_shutdown()
 
     def run_statemachine(self, statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, K_d, D_d, periodTime, coriolis, mass, gravity, jacobian, djacobian, cartesian_pose_error, cartesian_velocity_error, cartesian_acceleration):
@@ -365,11 +361,11 @@ class controller():
         TODO clear names of controller
         """
         
-        if statecondition == 1:     # State 1: DLR impedance controller - cartesian space (Source DLR: Alin Albu-Schäffer )
+        if statecondition == 1:     # State 1: DLR impedance controller - cartesian space (Source DLR: Alin Albu-Schäffer )           
             K_d = K_d[:6,:6]          # Reduce 7x7 to 6x6
             D_d = D_d[:6,:6]          # Reduce 7x7 to 6x6
-            K_n = np.identity(7)*30  # positiv definite stiffness matrix - 7x7 matrix
-            D_n = np.identity(7)*1   # positiv definite damping matrix - 7x7 matrix
+            K_n = np.identity(7)*1 # positiv definite stiffness matrix - 7x7 matrix #TODO add to config file
+            D_n = np.identity(7)*1   # positiv definite damping matrix - 7x7 matrix #TODO add to config file
             q_n = np.atleast_2d(np.array(self.settings.get_nullspace_pose())).T  # get Nullspace configuration
 
             if periodTime == 0:
@@ -383,8 +379,8 @@ class controller():
         elif statecondition == 2:   # State 2: PD impedance controller - cartesian space 
             K_d = K_d[:6,:6]          # Reduce 7x7 to 6x6
             D_d = D_d[:6,:6]          # Reduce 7x7 to 6x6
-            K_n = np.identity(7)*30  # positiv definite stiffness matrix - 7x7 matrix
-            D_n = np.identity(7)*1   # positiv definite damping matrix - 7x7 matrix
+            K_n = np.identity(7)*30  # positiv definite stiffness matrix - 7x7 matrix #TODO add to config file
+            D_n = np.identity(7)*1   # positiv definite damping matrix - 7x7 matrix   #TODO add to config file
             q_n = np.atleast_2d(np.array(self.settings.get_nullspace_pose())).T  # get Nullspace configuration
             
             motor_torque = self.PD_impedance_cartesian.calc_joint_torque(K_d, D_d, K_n, q_n, cartesian_pose_error, coriolis, jacobian, gravity, cur_joint_velocity, 
@@ -400,7 +396,7 @@ class controller():
             return motor_torque
 
         else:
-            print('State does not exists. Exiting...')
+            rospy.loginfo('State does not exists. Exiting...')
             pass
      
     def run_controller(self):
@@ -409,24 +405,25 @@ class controller():
         Parameters: None
         Return: motor torques (dict: 7x1)
         """
-        print("[Control_node]: Own controlloop is working: ", self.settings.get_control_flag())
-        print("[Control_node]: If false, too turn on set rosparam to true.")
+        rospy.loginfo("[Control_node]: Own controlloop is running: {0}\n".format(self.settings.get_control_flag()))
+        rospy.loginfo("[Control_node]: If false, too turn on control set rosparam to true.")
+        r = rospy.Rate(self.rate)
         while not rospy.is_shutdown():
-            # self.pr.enable()
+            #self.pr.enable()
 
 
             ### UPDATE current robot state ###
-            self.robot_dyn_kin.update_robot_states(self.get_periodTime())
+            periodTime = self.get_periodTime()
+            self.robot_dyn_kin.update_robot_states(periodTime)
             controller_flag = self.settings.get_control_flag()
             move2neutral = self.settings.get_move2neutral()
 
-            if move2neutral == True:
-                # TODO debug
+            if move2neutral == True: 
                 controller_flag = False
                 timeout = 5
                 speed = 0.2
                 self.robot_dyn_kin.move2neutral(timeout, speed)
-                print("[Control_node]: Moved to inital pose.")
+                rospy.loginfo("[Control_node]: Moved to inital pose.")
                 self.settings.set_move2neutral(False)
         
             if controller_flag == False:              
@@ -446,7 +443,7 @@ class controller():
                 coriolis = self.robot_dyn_kin.get_coriolis() # numpy 7x1
                 
                 ### UPDATE current parameter and desired position and velocity ###
-                K_d, D_d, periodTime, joint_angle_desi, joint_velocity_desi = self.update_parameters() # updates K_d, D_d
+                K_d, D_d, joint_angle_desi, joint_velocity_desi = self.update_parameters() # updates K_d, D_d
                 statecondition = self.get_statecondition() # int
 
                 ### CALCULATE error
@@ -489,10 +486,10 @@ class controller():
                 ### PUBLISH Joint  torques
                 self.robot_dyn_kin.set_joint_torques(torque_motor_dict)
 
-                # self.pr.disable()
-                # self.pr.print_stats(sort='time')  
+                #self.pr.disable()
+                #self.pr.print_stats(sort='time')  
             
-            rospy.Rate(self.rate).sleep()
+            r.sleep()
         self.clean_shutdown()
    
   

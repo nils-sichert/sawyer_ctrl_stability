@@ -15,8 +15,8 @@ class Safety_regulator():
         self.joint_angle_safety_lower = self.joint_angle_limit_lower*(1-safety_margin)
         self.joint_efforts_limit_upper = joint_efforts_limits_upper[0]
         self.joint_efforts_limit_lower = joint_efforts_limits_lower[0]
-        print("[Saftey regulator]: Allowed joint efforts upper limit: ", self.joint_efforts_limit_upper)
-        print("[Saftey regulator]: Allowed joint efforts lower limit: ", self.joint_efforts_limit_lower)
+        rospy.loginfo("[Safety regulator]: Allowed joint efforts upper limit: \n{0}\n".format(self.joint_efforts_limit_upper))
+        rospy.loginfo("[Safety regulator]: Allowed joint efforts lower limit: \n{0}\n".format(self.joint_efforts_limit_lower))
 
         self.oscillation_observer_window_length = oscillation_observer_window_length
         self.oscillation_observer_activ = False
@@ -74,8 +74,8 @@ class Safety_regulator():
                     if f_tmp >= oscillation_frequency:
                         if np.abs(power_tmp[i]) >= oscillation_power:
                             flag = False
-                            print("[Saftey regulator]: Oscillation shutdown at joint: ", j)
-                            print("[Safety regulator]: Please control values for stifness and damping.")
+                            rospy.loginfo("[Safety regulator]: Oscillation shutdown at joint: \n{0}\n".format(j))
+                            rospy.loginfo("[Safety regulator]: Please control values for stifness and damping.")
                             break
                         # TODO add reset self.oscillation_observer_activ flag to be able to restart controller
         if flag == False:

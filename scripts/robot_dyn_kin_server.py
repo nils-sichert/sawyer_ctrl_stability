@@ -6,7 +6,6 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import Empty
 from intera_core_msgs.msg import JointLimits, SEAJointState
 import PyKDL as kdl
-import copy
 from kdl_parser_py import urdf
 import sys, os
 
@@ -20,7 +19,7 @@ from intera_interface import CHECK_VERSION
 class Robot_dynamic_kinematic_server():
 
     def __init__(self, limb):
-        print("Initializing Robot dynamic and kinematic server")
+        rospy.loginfo("[Robot Kin_Dyn]: Initializing Robot dynamic and kinematic server")
         #TODO ROS_SET: passed as default option when init class
         # rospy.init_node('Robot_dyn_kin_server', anonymous=True)        
 
@@ -33,7 +32,7 @@ class Robot_dynamic_kinematic_server():
         # Instance Robotic Chain
         # TODO Put in seperate script dyn/kin in script (robot_dyn_kin.py)
         #urdf_filepath = os.path.abspath(os.path.join(os.path.abspath(__file__), os.pardir, os.pardir, os.pardir, 'sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'))
-        urdf_filepath = '/home/airlab5/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'
+        urdf_filepath = '/home/nilssichert/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()
@@ -45,12 +44,12 @@ class Robot_dynamic_kinematic_server():
         
       
         # verify robot is enabled
-        print("Getting robot state... ")
+        rospy.loginfo("[Robot Kin_Dyn]: Getting robot state... ")
         self._rs = intera_interface.RobotEnable(CHECK_VERSION)
         self._init_state = self._rs.state().enabled
-        print("Enabling robot... ")
+        rospy.loginfo("[Robot Kin_Dyn]: Enabling robot... ")
         self._rs.enable()
-        print("Running. Ctrl-c to quit")
+        rospy.loginfo("[Robot Kin_Dyn]: Running. Ctrl-c to quit")
 
         # Robot limit and safety
         self.joint_angle_limit_upper = np.atleast_2d(np.array(self._limits.get_joint_upper_limits(self._joint_names)))
@@ -79,7 +78,7 @@ class Robot_dynamic_kinematic_server():
         """
         Clean exit of controller node
         """
-        print("\nExiting Control node...")
+        rospy.loginfo("[Robot Kin_Dyn]: Exiting Control node...")
         self._limb.exit_control_mode()
 
     def calc_pose_cartesianSpace(self, type, joint_values = None, link_number = 7):
@@ -164,7 +163,11 @@ class Robot_dynamic_kinematic_server():
         Parameters: joacobian (6x7), previous jacobian (6x7), period Time (sec)
         Return: djacobian (6x7)
         """
-        self.djacobian = np.atleast_2d((self.get_jacobian()-self.get_jacobian_prev())/self.get_periodTime())
+        periodTime = self.get_periodTime()
+        if periodTime > 0:
+            self.djacobian = np.atleast_2d((self.get_jacobian()-self.get_jacobian_prev())/self.get_periodTime())
+        else:
+            self.djacobian = np.zeros((6,7))
         return 
 
 
@@ -222,9 +225,8 @@ class Robot_dynamic_kinematic_server():
         Parameters: dictionary
         Return: list
         """
-        list_tmp = []
-        for key, value in dic.items():
-            list_tmp.append(value)
+
+        list_tmp = list(dic.values())
         return list_tmp
     
     def list2dictionary(self, list):
@@ -260,13 +262,13 @@ class Robot_dynamic_kinematic_server():
         Parameters: None
         Return: jacobian matrix (6x7)
         """
-        return copy.deepcopy(self.jacobian_prev)
+        return self.jacobian_prev   #copy.deepcopy(self.jacobian_prev)
 
     def get_djacobian(self):
-        return copy.deepcopy(self.djacobian)
+        return self.djacobian       #copy.deepcopy(self.djacobian)
     
     def get_jacobian(self):
-        return copy.deepcopy(self.jacobian)
+        return self.jacobian        #copy.deepcopy(self.jacobian)
 
     def get_coriolis(self):
         return self.calc_coriolis().T
@@ -301,28 +303,28 @@ class Robot_dynamic_kinematic_server():
         return velocity
 
     def get_periodTime(self):
-        return copy.deepcopy(self.periodTime)
+        return self.periodTime #copy.deepcopy(self.periodTime)
     
     def get_current_DisplayAngle(self):
         return self._head.pan()
     
     def get_joint_limits(self):
-        upper_limit = copy.deepcopy(self.joint_angle_limit_upper)
-        lower_limit = copy.deepcopy(self.joint_anlge_limit_lower)
+        upper_limit = self.joint_angle_limit_upper #copy.deepcopy(self.joint_angle_limit_upper)
+        lower_limit = self.joint_anlge_limit_lower #copy.deepcopy(self.joint_anlge_limit_lower)
         return upper_limit, lower_limit
 
     def get_torque_limits(self):
-        upper_limit = copy.deepcopy(self.joint_efforts_limit_upper)
-        lower_limit = copy.deepcopy(self.joint_efforts_limit_lower)
+        upper_limit = self.joint_efforts_limit_upper #copy.deepcopy(self.joint_efforts_limit_upper)
+        lower_limit = self.joint_efforts_limit_lower #copy.deepcopy(self.joint_efforts_limit_lower)
         return upper_limit, lower_limit
     
     def get_velocity_limits(self):
-        upper_limit = copy.deepcopy(self.joint_velocity_limits_upper)
-        lower_limit = copy.deepcopy(self.joint_velocity_limits_lower)
+        upper_limit = self.joint_velocity_limits_upper #copy.deepcopy(self.joint_velocity_limits_upper)
+        lower_limit = self.joint_velocity_limits_lower #copy.deepcopy(self.joint_velocity_limits_lower)
         return upper_limit, lower_limit
     
     def get_joint_names(self):
-        return copy.deepcopy(self._joint_names)
+        return self._joint_names #copy.deepcopy(self._joint_names)
     
     def get_cartesian_acceleration_EE(self):
         # Acceleration Vector

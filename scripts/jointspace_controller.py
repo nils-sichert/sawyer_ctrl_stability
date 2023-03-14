@@ -15,6 +15,7 @@ class spring_damper_jointspace():
         """
         torque_list = [0]*len(error_joint_angles)
         
+        # Control law
         for joint in range(len(error_joint_angles)):
             torque_list[joint] = -Kd[joint][joint] * (error_joint_angles[joint]) - Dd[joint][joint] * error_joint_velocity[joint] + gravity_compensation[joint]
         return self.array_to_list(torque_list)
@@ -47,7 +48,7 @@ class pd_impedance_jointspace():
         # Desired Torque
         torque_list = np.zeros((len(error_joint_angles),1))
 
-
+        # Control law
         for joint in range(len(error_joint_angles)):
             torque_list[joint] =  -Kd[joint][joint] * (error_joint_angles[joint]) - Dd[joint][joint] * error_joint_velocity[joint]+ gravity_compensation[joint] + coriolis_compensation[joint]
         return self.vec2list(torque_list)

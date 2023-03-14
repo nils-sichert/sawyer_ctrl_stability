@@ -93,8 +93,8 @@ class controller():
         self.torque_motor_t_1 = [0,0,0,0,0,0,0]
         self.pose_cart = None
         self.timestamp_t_1 = 0
-        self.Kd = None
-        self.Dd = None
+        self.K_d = None
+        self.D_d = None
 
         self.set_initalstate(self.robot_dyn_kin.get_current_joint_angles_list())
         self.set_cartesian_inital_pose(self.robot_dyn_kin.get_current_cartesian_pose())
@@ -124,67 +124,67 @@ class controller():
         """
         Updates stiffness matrix, time of period and gets the jacobian at time t-1, desired pose and velocity.
         Parameters: None
-        Return: Kd (7x7), samlpingTime (time of last period) (float), jacobian_prev (6x7), desired pose (6x1), desired velocity (6x1)
+        Return: K_d (7x7), samlpingTime (time of last period) (float), jacobian_prev (6x7), desired pose (6x1), desired velocity (6x1)
         """
-        Kd = self.update_Kd()
-        Dd = self.update_Dd()
+        K_d = self.update_K_d()
+        D_d = self.update_D_d()
         periodTime = self.get_periodTime() 
         joint_angle_desi = np.atleast_2d(self.safety_regulator.watchdog_joint_limits_jointangle_control(self.settings.get_joint_angle_desired())).T
         joint_velocity_desi = np.atleast_2d(np.array(self.settings.get_joint_velocity_desired())).T
 
-        return Kd, Dd, periodTime, joint_angle_desi, joint_velocity_desi
+        return K_d, D_d, periodTime, joint_angle_desi, joint_velocity_desi
         
-    def update_Kd(self):
+    def update_K_d(self):
         """
-        Updates the stiffness matrix Kd (7x7).
+        Updates the stiffness matrix K_d (7x7).
         Paramteres: None
-        Return: Kd (7x7)
+        Return: K_d (7x7)
         """
-        old_Kd = self.Kd
+        old_K_d = self.K_d
         tmp = self.settings.get_stiffness()
         if type(tmp) is list:
             if len(tmp)==7:
                 tmp_list = [0,1,2,3,4,5,6]
                 for i in range(len(tmp)):
                     tmp_list[i] = tmp[i]
-                self.Kd = np.diag(tmp)
+                self.K_d = np.diag(tmp)
             elif len(tmp)==1:
                 tmp = tmp[0]
-                self.Kd = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
+                self.K_d = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
             else:
-                print('[Control node / Update KD]: Wrong input format. Update of Kd is not executed')
+                print('[Control node / Update KD]: Wrong input format. Update of K_d is not executed')
         else:
-                print('[Control node / Update KD]: Wrong input format. Update of Kd is not executed')
+                print('[Control node / Update KD]: Wrong input format. Update of K_d is not executed')
 
-        if not np.array_equal(old_Kd, self.Kd):
-            print('[Control node / Update KD]: New Stiffness was choosen: \n', self.Kd)
-        return self.Kd
+        if not np.array_equal(old_K_d, self.K_d):
+            print('[Control node / Update KD]: New Stiffness was choosen: \n', self.K_d)
+        return self.K_d
     
-    def update_Dd(self):
+    def update_D_d(self):
         """
-        Updates the stiffness matrix Kd (7x7).
+        Updates the stiffness matrix K_d (7x7).
         Paramteres: None
-        Return: Kd (7x7)
+        Return: K_d (7x7)
         """
-        old_Dd = self.Dd
+        old_D_d = self.D_d
         tmp = self.settings.get_damping()
         if type(tmp) is list:
             if len(tmp)==7:
                 tmp_list = [0,1,2,3,4,5,6]
                 for i in range(len(tmp)):
                     tmp_list[i] = tmp[i]
-                self.Dd = np.diag(tmp)
+                self.D_d = np.diag(tmp)
             elif len(tmp)==1:
                 tmp = tmp[0]
-                self.Dd = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
+                self.D_d = np.diag([tmp,tmp,tmp,tmp,tmp,tmp,tmp])
             else:
-                print('[Control node / Update Dd]: Wrong input format. Update of Dd is not executed')
+                print('[Control node / Update D_d]: Wrong input format. Update of D_d is not executed')
         else:
-                print('[Control node / Update Dd]: Wrong input format. Update of Dd is not executed')
+                print('[Control node / Update D_d]: Wrong input format. Update of D_d is not executed')
 
-        if not np.array_equal(old_Dd, self.Dd):
-            print('New Damping was choosen: \n', self.Dd)
-        return self.Dd
+        if not np.array_equal(old_D_d, self.D_d):
+            print('New Damping was choosen: \n', self.D_d)
+        return self.D_d
    
     def calc_error_cart(self, pose_desi, jacobian, current_joint_velocity, velocity_desired = [0,0,0,0,0,0],):
         """
@@ -301,7 +301,7 @@ class controller():
         Return: statecondition (int)
         """
         statecondition = self.settings.get_Statemachine_condition()
-        if statecondition != 3 and statecondition != 4 and statecondition !=2: # and statecondition !=2:
+        if statecondition != 3 and statecondition != 4 and statecondition !=2 and statecondition !=1:
             statecondition = 3
             self.settings.set_Statemachine_condition(3)
         return statecondition
@@ -347,43 +347,50 @@ class controller():
         print("\nExiting Control node...")
         self.robot_dyn_kin.clean_shutdown()
 
-    def run_statemachine(self, statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, Kd, Dd, periodTime, coriolis, mass, gravity, jacobian, djacobian, cartesian_pose_error, cartesian_velocity_error, cartesian_acceleration):
+    def run_statemachine(self, statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, K_d, D_d, periodTime, coriolis, mass, gravity, jacobian, djacobian, cartesian_pose_error, cartesian_velocity_error, cartesian_acceleration):
         """
         Statemachine is shifting between different control algorithms. The statecondition is a Ros parameter and can therefore be changed 
             while running the loop. Also, the method get_statecondition can be used to implement a switch condition or a switch observer.
         Parameters: statecondition (int),  current joint angle (7x1), current joint velocity (7x1),  current pose error (6x1), 
             current velocity error (6x1), joint angle error (7x1), joint velocity error (7x1), acceleration ddx (6x1), 
-            stiffness matrix Kd (7x7), sampling time (float), coriolis vecotr (7x1), mass matrix (7x7), gravity vector (7x1),
+            stiffness matrix K_d (7x7), sampling time (float), coriolis vecotr (7x1), mass matrix (7x7), gravity vector (7x1),
             jacobian matrix (6x7), derivative of jacobian - djacobian (6x7)
         Return: List of control torques for the motor (7x1)
         TODO clear names of controller
         """
         
-        if statecondition == 1: # State 1: DLR impedance controller - cartesian space (Source DLR: Alin Albu-Schäffer )
-            Kd = Kd[:6,:6]
-            motor_torque = self.DLR_Impedance_Cartesian.calc_joint_torque(Kd, cartesian_acceleration, cur_joint_angle, cur_joint_velocity, cartesian_pose_error, cartesian_velocity_error,  mass, coriolis, jacobian, djacobian, gravity, periodTime)
+        if statecondition == 1:     # State 1: DLR impedance controller - cartesian space (Source DLR: Alin Albu-Schäffer )
+            K_d = K_d[:6,:6]          # Reduce 7x7 to 6x6
+            D_d = D_d[:6,:6]          # Reduce 7x7 to 6x6
+            K_n = np.identity(7)*30  # positiv definite stiffness matrix - 7x7 matrix
+            D_n = np.identity(7)*1   # positiv definite damping matrix - 7x7 matrix
+            q_n = np.atleast_2d(np.array(self.settings.get_nullspace_pose())).T  # get Nullspace configuration
+
+            if periodTime == 0:
+                periodTime = 1/self.rate
+            
+            motor_torque = self.DLR_Impedance_Cartesian.calc_joint_torque( K_d, K_n, D_n, q_n, mass, jacobian, djacobian, coriolis, gravity, cartesian_pose_error, 
+                                                                          cartesian_velocity_error, cartesian_acceleration, cur_joint_angle, cur_joint_velocity, periodTime, 
+                                                                          self.settings.get_nullspace_is_locked())
             return motor_torque
         
-        elif statecondition == 2: # State 2: PD impedance controller - cartesian space 
-            Kd = Kd[:6,:6]
-            Dd = Dd[:6,:6]
-            Kn = np.identity(7)*30 # positiv definite stiffness matrix - 7x7 matrix
-            Dn = np.identity(7)*1 # positiv definite damping matrix - 7x7 matrix
-            qn = np.atleast_2d(np.array([-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40])).T # desired joint configuration of arm at nullspace - 7x1 vector
-            if self.settings.get_nullspace_is_free() == True: # free Nullspace
-                qn = cur_joint_angle
-            else:
-                #qn = self.settings.get_nullspace_pose()
-                qn = np.atleast_2d(np.array([-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40])).T
-            motor_torque = self.PD_impedance_cartesian.calc_joint_torque(Kd, Dd, Kn, Dn, qn, cartesian_pose_error, cartesian_velocity_error, coriolis, jacobian, gravity, cur_joint_velocity, cur_joint_angle)
+        elif statecondition == 2:   # State 2: PD impedance controller - cartesian space 
+            K_d = K_d[:6,:6]          # Reduce 7x7 to 6x6
+            D_d = D_d[:6,:6]          # Reduce 7x7 to 6x6
+            K_n = np.identity(7)*30  # positiv definite stiffness matrix - 7x7 matrix
+            D_n = np.identity(7)*1   # positiv definite damping matrix - 7x7 matrix
+            q_n = np.atleast_2d(np.array(self.settings.get_nullspace_pose())).T  # get Nullspace configuration
+            
+            motor_torque = self.PD_impedance_cartesian.calc_joint_torque(K_d, D_d, K_n, q_n, cartesian_pose_error, coriolis, jacobian, gravity, cur_joint_velocity, 
+                                                                         cur_joint_angle, self.settings.get_nullspace_is_locked())
             return motor_torque
 
         elif statecondition == 3: # State 3: Spring/Damper impedance controller - jointspace
-            motor_torque = self.impedance_ctrl_simple.calc_joint_torque(joint_angle_error, joint_velocity_error, Kd, Dd, gravity)
+            motor_torque = self.impedance_ctrl_simple.calc_joint_torque(joint_angle_error, joint_velocity_error, K_d, D_d, gravity)
             return motor_torque
         
         elif statecondition == 4: # State 4: PD impedance Controller - jointspace
-            motor_torque = self.PD_impedance_jointspace.calc_joint_torque(gravity, Kd, Dd, coriolis, joint_angle_error, joint_velocity_error)
+            motor_torque = self.PD_impedance_jointspace.calc_joint_torque(gravity, K_d, D_d, coriolis, joint_angle_error, joint_velocity_error)
             return motor_torque
 
         else:
@@ -433,7 +440,7 @@ class controller():
                 coriolis = self.robot_dyn_kin.get_coriolis() # numpy 7x1
                 
                 ### UPDATE current parameter and desired position and velocity ###
-                Kd, Dd, periodTime, joint_angle_desi, joint_velocity_desi = self.update_parameters() # updates Kd, Dd
+                K_d, D_d, periodTime, joint_angle_desi, joint_velocity_desi = self.update_parameters() # updates K_d, D_d
                 statecondition = self.get_statecondition() # int
 
                 ### CALCULATE error
@@ -443,7 +450,7 @@ class controller():
                 cartesian_pose_error, cartesian_velocity_error = self.calc_error_cart(pose_desired, self.robot_dyn_kin.get_jacobian(), self.robot_dyn_kin.get_current_joint_velocities())
                 cartesian_acceleration = self.robot_dyn_kin.get_cartesian_acceleration_EE()
                 
-                torque_motor = self.run_statemachine(statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, Kd, Dd, periodTime, 
+                torque_motor = self.run_statemachine(statecondition, cur_joint_angle, cur_joint_velocity, joint_angle_error, joint_velocity_error, K_d, D_d, periodTime, 
                                                      coriolis, mass, gravity, jacobian, djacobian, cartesian_pose_error, cartesian_velocity_error, cartesian_acceleration)
                 
                 ### Safety Regulator

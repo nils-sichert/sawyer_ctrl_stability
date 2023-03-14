@@ -19,7 +19,7 @@ oscillation_guard: {
 }
 
 nullspace: {
-  is_free: false,
+  is_locked: false,
   jointspace_pose: [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40],
 }
 named_poses: {

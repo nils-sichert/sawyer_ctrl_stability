@@ -46,8 +46,8 @@ class Configuration_server():
     def get_cartesian_pose_desired(self):
         return rospy.get_param("control_node/cartesian_pose_desired")
 
-    def get_nullspace_is_free(self):
-        return rospy.get_param("nullspace/is_free")
+    def get_nullspace_is_locked(self):
+        return rospy.get_param("nullspace/is_locked")
     
     def get_nullspace_pose(self):
         return rospy.get_param("nullspace/jointspace_pose")
@@ -57,6 +57,7 @@ class Configuration_server():
 
     def get_contact_collision_disabled(self):
         return rospy.get_param("control_node/suppress_contact_collision_detection")
+    
 
     ######## Setter Methods ########
 

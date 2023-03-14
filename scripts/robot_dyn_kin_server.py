@@ -32,7 +32,7 @@ class Robot_dynamic_kinematic_server():
         # Instance Robotic Chain
         # TODO Put in seperate script dyn/kin in script (robot_dyn_kin.py)
         #urdf_filepath = os.path.abspath(os.path.join(os.path.abspath(__file__), os.pardir, os.pardir, os.pardir, 'sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'))
-        urdf_filepath = '/home/nilssichert/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'
+        urdf_filepath = '/home/airlab5/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()
@@ -69,7 +69,7 @@ class Robot_dynamic_kinematic_server():
 
         # control parameters
         self.rate = 100 # Controlrate - 100Hz
-        self._missed_cmd = 20 # Missed cycles before triggering timeout
+        self._missed_cmd = 1 # Missed cycles before triggering timeout
 
         # Set limb controller timeout to return to Sawyer position controller
         self._limb.set_command_timeout((1.0 / self.rate) * self._missed_cmd)

@@ -17,7 +17,7 @@ control_node: {
 oscillation_guard: {
   window_length: 30,
   corner_frequency: 10,
-  magnitude_limit: 12,
+  magnitude_limit: 10,
 }
 
 nullspace: {

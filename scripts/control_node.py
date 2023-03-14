@@ -79,6 +79,7 @@ class controller():
         ### Debug Publisher ###
         self._pub_error = rospy.Publisher('/control_node_debug/EE_Pose_Error', JointState, queue_size=1)
         self._pub_joint_velocity = rospy.Publisher('/control_node_debug/joint_velocity', JointState, queue_size=1)
+        self._pub_joint_torques = rospy.Publisher('control_node_debug/setpoints_motor_torque', JointState, queue_size=1)
         
         self._pub_oscillation = [None]*7 #TODO delete hardcode
         for index, value in enumerate(joint_effort_limit_upper.T):
@@ -111,6 +112,11 @@ class controller():
         msg = JointState()
         msg.position = position
         msg.velocity = velocity
+        publisher.publish(msg)
+
+    def publish_effortstate(self, effort, publisher: rospy.Publisher):
+        msg = JointState()
+        msg.effort = effort
         publisher.publish(msg)
 
     def publish_head_light_color(self, string, publisher: rospy.Publisher):
@@ -329,7 +335,7 @@ class controller():
         elif 0.75 <= saturation <0.95:
             #light_name='head_blue_light'
             #self.light.set_light_state(light_name)
-            msg = "blue"
+            msg = "yellow"
             self.publish_head_light_color(msg, self._pub_lightcolor)
         else:
             #light_name='head_green_light'
@@ -458,21 +464,23 @@ class controller():
                 torque_motor, saturation = self.safety_regulator.watchdog_torque_limits(torque_motor)
                 
                 flag, power, frequency = self.safety_regulator.watchdog_oscillation(cur_joint_velocity, self.rate, self.settings.get_oscillation_window_len(), self.settings.get_oscillation_corner_freq() , self.settings.get_oscillation_power_limit())
-                self.settings.set_control_flag(flag)
+                if flag == False:
+                    self.settings.set_control_flag(flag)
                 for i in range(len(torque_motor)):
                     power_tmp = power[i]
                     frequency_tmp = frequency[i]
                     self.publish_jointstate(frequency_tmp, power_tmp, self._pub_oscillation[i])
 
                 ### DISABLE cuff and gravitation compensation and PUBLISH debug values
-                self._pub_cuff_disable.publish()  # TODO cuff disable/ enable by default / maybe FLAG script
+                self._pub_cuff_disable.publish()  
                 self._pub_gc_disable.publish()
                 if self.settings.get_self_collision_is_disabled() == True:
                     self._pub_self_collision_disable.publish()
                 if self.settings.get_contact_collision_disabled() == True:
                     self._pub_contact_collision_disable.publish()
 
-                self.publish_jointstate(joint_velocity_error, cur_joint_velocity,self._pub_joint_velocity)
+                self.publish_jointstate(joint_velocity_error, cur_joint_velocity, self._pub_joint_velocity)
+                self.publish_effortstate(torque_motor, self._pub_joint_torques)
                 self.set_headlight_color(saturation)
                 ### CONVERT controller output in msg format dictionary
 

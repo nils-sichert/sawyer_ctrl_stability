@@ -24,6 +24,8 @@ Install necessary packages:
   sudo apt-get install python3-pykdl
   sudo apt-get install ros-noetic-kdl-parser-py
   pip install scipy
+  sudo apt-get install python3-matplotlib
+  sudo apt-get ros-noetic-tf-transformations
 ```
     
 ## Documentation

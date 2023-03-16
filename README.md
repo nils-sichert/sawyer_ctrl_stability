@@ -10,9 +10,9 @@ This package provides a control framework for the Rethink robotics robot "Sawyer
 
 ## Table of Content
 
-1. [Installation](Installation)
-2. [Configuration](Configuration)
-3. [Framework](Framework)
+1. [Installation](#Installation)
+2. [Configuration](#Configuration)
+3. [Framework](#Framework)
 
 # Installation
 Install Ubuntu 20.04 LTS and follow installation guide of Rethink robotics for setting up [ROS, Sawyer's SDK](https://support.rethinkrobotics.com/support/solutions/articles/80000980134-workstation-setup) and [Simulation](https://support.rethinkrobotics.com/support/solutions/articles/80000980381-gazebo-tutorial).

@@ -42,11 +42,11 @@ Install necessary packages:
 if stop robot will return to default position controller\
 Start:
 ```bash
-  rosparam set /control_node/control_flag True
+  rosparam set /control_node/control_is_on True
 ```
 Stop:
 ```bash
-  rosparam set /control_node/control_flag False
+  rosparam set /control_node/control_is_on False
 ```
 ### Set neutral pose of robot:
 ```bash

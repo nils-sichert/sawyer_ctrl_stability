@@ -168,7 +168,8 @@ catkin_install_python(PROGRAMS
   scripts/safety_regulator.py
   scripts/configuration_server.py
   scripts/head_light_manager.py
-  scripts/stiffness_mangager.py
+  scripts/stiffness_manager.py
+  scripts/trajectory_publisher_jointspace.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 

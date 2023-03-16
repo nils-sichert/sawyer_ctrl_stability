@@ -7,6 +7,12 @@ import rospy
 class Safety_regulator():
     def __init__(self, joint_angle_limits_upper, joint_angle_limits_lower, joint_efforts_limits_upper, joint_efforts_limits_lower, oscillation_observer_window_length,
                  oscillation_shutoff_frequency, oscillation_shutoff_power):
+        """
+        Robots safety (e.g. Oscillation and joint torque observer) is regulated by methods of this class.
+        Parameters: upper/ lower joint angle limits (7x1), upper/ lower joint effort limits (7x1), oscillation observer window length (float), 
+                    oscillation corner frequency (float), oscillation limit magnitude (float)
+        """
+        
         safety_margin = 0.05 # %-safety margin
 
         self.joint_angle_limit_upper = joint_angle_limits_upper[0]
@@ -25,10 +31,15 @@ class Safety_regulator():
         self.oscillation_shutoff_power = oscillation_shutoff_power
         self.counter = 0
 
-
-    ############ Watchdogs ############ 
+    ############   Watchdogs   ############ 
     
     def watchdog_joint_limits_torque_control(self, jointangles, gravitycompensation, motor_torques):
+        """
+        Limit joint torque setpoint when approaching joint limits.
+        Parameters: joint angles (7x1), gravity compensation (7x1), motor torques (7x1)
+        Return: motor torques (7x1)
+        """
+        
         for value in self.joints_in_safe_limits(jointangles)[0]:
             if value == False:
                 tmp = False
@@ -43,15 +54,30 @@ class Safety_regulator():
             return motor_torques
     
     def watchdog_joint_limits_jointangle_control(self, jointangles):
+        """
+        Limit desired joint angles to reachable angles.
+        Parameters: joint angles (7x1)
+        Return: joint angles (7x1)
+        """
         joint_angles = self.clip_joints_angle_safe(jointangles)
         return joint_angles
     
     def watchdog_torque_limits(self, motor_torques):
+        """
+        Limits torques.
+        Parameters: motor torques (7x1)
+        Return: motor torques (7x1), level of saturation as factor between 0 (=0%) and 1 (=100%) (float) 
+        """
         motor_torques = self.clip_joints_effort_safe(motor_torques)
         saturation = np.max((self.joint_efforts_limit_upper - np.abs(np.abs(motor_torques)-self.joint_efforts_limit_upper))/self.joint_efforts_limit_upper)
         return motor_torques, saturation
     
     def watchdog_oscillation(self, oscillation_param, rate, oscillation_observer_window_length, oscillation_frequency, oscillation_power):
+        """
+        Fast fourier transformation (FFT) of oscillation parameter and observing limits. If limits reached shout down controller.
+        Parameters: observed oscillation parameter (mx1), oscillation observer window length (int), oscillation corner frequency (float), oscillation shutdown magnitude (float)
+        Return: controlflag (bool), magnitude of each frequency (nx1), frequencys(nx1)
+        """
         oscillation_param = np.atleast_2d(oscillation_param)
         flag = True
         power = [[0]]*len(oscillation_param)
@@ -133,11 +159,7 @@ class Safety_regulator():
         return np.clip(effort, lower_lim, upper_lim)
     
     def clip_joint_effort_approach_jointlimit(self, motor_torques, joint_angles, gravity_compensation, torque_reduction_factor = 0.1):
-        # TODO debug effort decreasing when approaching joint limit 
-        # for i in range(len(motor_torques)):
-        #    if joint_angles[i] <= self.joint_angle_safety_lower[i] or joint_angles[i] >= self.joint_angle_safety_upper[i]:
-        #        new_torque = (motor_torques[i]-gravity_compensation[i])*torque_reduction_factor+gravity_compensation[i]
-        #        motor_torques[i] = new_torque
+        # TODO implement behavior when getting close to joint anlge limits releasing torque.
         return motor_torques
 
 def main():

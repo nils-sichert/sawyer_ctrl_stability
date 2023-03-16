@@ -25,41 +25,49 @@ import cProfile
 
 
 """
-Please add Bugs and Todos here:
-TODO https://support.rethinkrobotics.com/support/solutions/articles/80000980380-motion-interface-tutorial
+Please add Bugs and Todos here:s
 TODO add switch between cartesian pose and joint space pose
 TODO improve cartesian pose getter and setter
 """
 
 class controller():
     def __init__(self, limb = "right"):
+        """
+        Control class, handling the controlloop and a statemachine which is switching the control laws. 
+        Parameter: limb configuration (Str)
+        Output: joint torque setpoints for internal PID controller (dict: 7x1)
+        """
         
-        
-
+        # Initalizing Rosnode
         rospy.init_node('Control_manager', anonymous=True)
         rospy.loginfo("[Control node]: Initializing node...")
-        
+
+        # Control rate
+        self.rate = 100 
+
         ##### Instances ######
-        # Settings
+        ## Settings
         self.settings = Configuration_server()
 
-        # Robot
-        self.robot_dyn_kin = Robot_dynamic_kinematic_server(limb)
+        ## Robot
+        self.robot_dyn_kin = Robot_dynamic_kinematic_server(limb, self.rate)
         
-        # Controller
+        ## Controller
+        # cartesian space
         self.DLR_Impedance_Cartesian = dlr_impedance_cartesian()
         self.PD_impedance_cartesian = pd_impedance_cartesian()
 
+        # joint space
         self.impedance_ctrl_simple = spring_damper_jointspace()
         self.PD_impedance_jointspace  = pd_impedance_jointspace()
 
-        self.pr = cProfile.Profile()
+        
         # Safety and Watchguard
         joint_angle_limit_upper, joint_angle_limit_lower = self.robot_dyn_kin.get_joint_limits()
         joint_effort_limit_upper, joint_effort_limit_lower = self.robot_dyn_kin.get_torque_limits()
         self.safety_regulator = Safety_regulator(joint_angle_limit_upper, joint_angle_limit_lower, joint_effort_limit_upper, joint_effort_limit_lower, self.settings.get_oscillation_window_len(), self.settings.get_oscillation_corner_freq(),self.settings.get_oscillation_power_limit() )
 
-        ### Publisher ###
+        ###### Publisher ######
         # create publisher to suppress cuff 
         cuff_ns = 'robot/limb/' + limb + '/suppress_cuff_interaction'
         self._pub_cuff_disable = rospy.Publisher(cuff_ns, Empty, queue_size=1)
@@ -77,22 +85,36 @@ class controller():
         self._pub_contact_collision_disable = rospy.Publisher(cc_ns, Empty, queue_size=1)
 
         
-        ### Debug Publisher ###
+        ###### Debug ######
+        self.pr = cProfile.Profile()
+
+        ### Publisher ###
+        # Publisher error of Endeffector between desired and current pose
         self._pub_error = rospy.Publisher('/control_node_debug/EE_Pose_Error', JointState, queue_size=1)
+        
+        # Publisher error of joint velocitys and joint angles
         self._pub_joint_velocity = rospy.Publisher('/control_node_debug/joint_velocity', JointState, queue_size=1)
+        
+        # Publisher of motor torque setpoints (Outpu of controller)
         self._pub_joint_torques = rospy.Publisher('control_node_debug/setpoints_motor_torque', JointState, queue_size=1)
         
+        # Publisher of colors for headlight (setpoint torque: green < 75%, yellow >= 75% <95%, red >=95% of torque limit)        
+        self._pub_lightcolor = rospy.Publisher('control_node_debug/color', String, queue_size=1)
+
+        # Publisher: FFT of joint velocity, publish frequency and magnitude
         self._pub_oscillation = [None]*7 
         for index, value in enumerate(joint_effort_limit_upper.T):
             topic = '/control_node_debug/oscillation_joint/' + str(index)
             self._pub_oscillation[index] = rospy.Publisher(topic, JointState, queue_size=1)
-        
-        self._pub_lightcolor = rospy.Publisher('control_node_debug/color', String, queue_size=1)
 
+        ### Subscriber ###
+        # Stiffness and damping matrix
         self._sub_Kd_Dd = rospy.Subscriber('/control_node/Kd_Dd', JointState, self.callback_Kd_Dd)
 
-        self.rate = 1000 # Control rate
+        # desired joint state
+        self._sub_joint_states_desired = rospy.Subscriber('/control_node/joint_states_desi', JointState, self.callback_jointstate)
 
+        
         # Instance state varibles
         self.torque_motor_t_1 = [0,0,0,0,0,0,0]
         self.pose_cart = None
@@ -101,19 +123,14 @@ class controller():
         self.K_d_prev = [1]
         self.D_d = [1]
         self.D_d_prev = [1]
+        self._joint_angle_desired = [0,0,0,0,0,0,0]
+        self._joint_velocity_desired = [0,0,0,0,0,0,0]
 
         self.set_initalstate(self.robot_dyn_kin.get_current_joint_angles_list())
-        self.set_cartesian_inital_pose(self.robot_dyn_kin.get_current_cartesian_pose())
+        self.set_cartesian_pose(self.robot_dyn_kin.get_current_cartesian_pose())
 
-
-    ############ Publisher (Debugpurpose) ############ 
-
+    ############ Publisher & Callbacks (Debug purpose) ############ 
     def publish_jointstate(self, position, velocity, publisher: rospy.Publisher):
-        """
-        Publishs position and velocity error of endeffector.
-        Parameters: position error (6x1, 'error_pos), velocity error (6x1, 'error_vel)
-        Returns: publisher.publish()
-        """
         msg = JointState()
         msg.position = position
         msg.velocity = velocity
@@ -132,9 +149,12 @@ class controller():
     def callback_Kd_Dd(self, data):
         self.K_d = data.position
         self.D_d = data.velocity
+    
+    def callback_jointstate(self, data):
+        self._joint_angle_desired = data.position
+        self._joint_velocity_desired = data.velocity
 
     ############ Update States/ Variables ############ 
-
     def update_parameters(self):
         """
         Updates stiffness matrix, time of period and gets the jacobian at time t-1, desired pose and velocity.
@@ -143,8 +163,8 @@ class controller():
         """
         K_d = self.update_K_d()
         D_d = self.update_D_d()
-        joint_angle_desi = np.atleast_2d(self.safety_regulator.watchdog_joint_limits_jointangle_control(self.settings.get_joint_angle_desired())).T # TODO change to subscriber and Topic
-        joint_velocity_desi = np.atleast_2d(np.array(self.settings.get_joint_velocity_desired())).T # TODO change to subscriber and Topic
+        joint_angle_desi = np.atleast_2d(self.safety_regulator.watchdog_joint_limits_jointangle_control(self._joint_angle_desired)).T 
+        joint_velocity_desi = np.atleast_2d(np.array(self._joint_velocity_desired)).T 
 
         return K_d, D_d, joint_angle_desi, joint_velocity_desi
         
@@ -208,13 +228,14 @@ class controller():
     def calc_error_cart(self, pose_desi, jacobian, current_joint_velocity, velocity_desired = [0,0,0,0,0,0],):
         """
         Calculation of position-, orientation-, velociteserrors and acceleration
-        Parameters: position vector (3x1), rotation matrix (3x3), current velocity (6x1), desired pose (6x1)
+        Parameters:  desired pose (pose_desi: 6x1), jacobian matrix (jacobian: 6x7), 
+                    current joint velocity (current_joint_velocity: 6x1), desired joint velocity (velocity_desired: 6x1)
         Return: error pose (6x1), error velocities (6x1), acceleration (6x1)
         """
         # input current pose
         tf_mat_cur = self.robot_dyn_kin.get_current_cartesian_tf()
         
-        # Position Error # TODO check sign
+        # Position Error 
         pos_x, pos_y, pos_z = tf_mat_cur[0,3], tf_mat_cur[1,3], tf_mat_cur[2,3]
 
         error_position = np.atleast_2d([pos_x-pose_desi[0], pos_y-pose_desi[1], pos_z-pose_desi[2]])
@@ -251,7 +272,6 @@ class controller():
         """
         Lowpassfilter to weight between acutal and previous step. Lowpass coefficient can be set as ROSPARAM.
         Parameters: actual value (nxm), previous value (nxm)
-        TODO clear method, make general useable
         """
         if len(y_t) is not len(y_t_1):
             rospy.loginfo("[Control node]: Length of input lowpass filter is not equal.")
@@ -263,7 +283,6 @@ class controller():
         return y
 
     ############ Format converter (KDL/Numpy, List/Dict) ############ 
-    
     def list2dictionary(self, list, joint_names):
         """
         Transform list into dictionary.
@@ -277,9 +296,7 @@ class controller():
             i += 1
         return new_limb_torque
 
-    
     ############ Getter methods ############ 
-
     def get_periodTime(self):
         """
         Compute exact time of last period.
@@ -298,30 +315,51 @@ class controller():
     def get_statecondition(self):
         """
         Gets statecondition from ROSPARAM server. This method can be used to implemend a decision
-        algorithm.
+        algorithm and to de/activate control laws.
         Parameters: None
         Return: statecondition (int)
         """
         statecondition = self.settings.get_Statemachine_condition()
-        if statecondition != 3 and statecondition != 4 and statecondition !=2 and statecondition !=1:
+        if statecondition != 3 and statecondition != 4: # and statecondition !=2 and statecondition !=1:
             statecondition = 3
             self.settings.set_Statemachine_condition(3)
         return statecondition
     
     def get_cartesian_pose_desired(self):
+        """
+        Get current desired cartesian pose from rosparam. TODO publisher/ subscriber of desired pose
+        Parameters: None
+        Return: current desired cartesian pose (6x1)
+        """
         return np.atleast_2d(self.settings.get_cartesian_pose_desired())
+    
+    ############ Setter methods ############
+    def set_initalstate(self, joint_angle_desired):
+        """
+        Set desired joint angles.
+        Parameters: desired joint angle (list: 6x1)
+        Retrun: None
+        """
+        rospy.set_param("control_node/joint_angle_desired", joint_angle_desired)
         
-    def set_initalstate(self, current_joint_angle):
-        rospy.set_param("control_node/joint_angle_desired", current_joint_angle)
-        
-    def set_cartesian_inital_pose(self, pose):
+    def set_cartesian_pose(self, pose):
+        """
+        Set cartesian pose.
+        Parameters: pose (6x1)
+        Return: None
+        """
         list_tmp = [0,0,0,0,0,0]
         pose_list = np.ndarray.tolist(pose)
-        for i in range(len(pose)):
-            list_tmp[i] = pose_list[i][0]
+        for index, value in enumerate(pose_list):
+            list_tmp[index] = pose_list[index][0]
         self.settings.set_cartesian_pose_desired(list_tmp)
 
     def set_headlight_color(self, saturation):
+        """
+        Set headlight colors.
+        Parameters: Saturation of torque limit (saturation: float)
+        Return: None
+        """
         
         if saturation >= 0.95:
             #light_name='head_red_light'
@@ -339,9 +377,7 @@ class controller():
             msg = "green"
             self.publish_head_light_color(msg, self._pub_lightcolor)
 
-
     ############ Control loop ############ 
-
     def clean_shutdown(self):
         """
         Clean exit of controller node
@@ -358,7 +394,6 @@ class controller():
             stiffness matrix K_d (7x7), sampling time (float), coriolis vecotr (7x1), mass matrix (7x7), gravity vector (7x1),
             jacobian matrix (6x7), derivative of jacobian - djacobian (6x7)
         Return: List of control torques for the motor (7x1)
-        TODO clear names of controller
         """
         
         if statecondition == 1:     # State 1: DLR impedance controller - cartesian space (Source DLR: Alin Albu-Schäffer )           
@@ -428,7 +463,7 @@ class controller():
         
             if controller_flag == False:              
                 self.set_initalstate(self.robot_dyn_kin.get_current_joint_angles_list())
-                self.set_cartesian_inital_pose(self.robot_dyn_kin.get_current_cartesian_pose())
+                self.set_cartesian_pose(self.robot_dyn_kin.get_current_cartesian_pose())
                 self.safety_regulator.reset_watchdig_oscillation()
 
             if controller_flag == True:

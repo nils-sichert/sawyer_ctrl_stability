@@ -5,25 +5,38 @@ import numpy as np
 from sensor_msgs.msg import JointState
 
 class trajectoy_executer():
+    """
+    Trajactory are executed either from file with joint position (resolution 400Hz), 
+    or from static pose based on the desired pose of the ros parameter server.
+    """
     def __init__(self) -> None:
         rospy.init_node("trajectory_publisher")
         
-        self._pub_joint_angle_desi = rospy.Publisher("/control_node/joint_angle_desi", JointState, queue_size=10)
-        self.rate = 100 #Hz
+        self._pub_joint_angle_desi = rospy.Publisher("/control_node/joint_states_desi", JointState, queue_size=10)
+        self.rate = 400 #Hz
         self.counter = 0
 
     def publish_jointstates(self, position, velocity, publisher: rospy.Publisher):
+        """
+        Publisher of desired joint angles and desired joint velocities
+        """
         msg = JointState()
         msg.position = position
         msg.velocity = velocity
         publisher.publish(msg)
 
     def get_joint_state_desired(self):
-            position = rospy.get_param("control_node/joint_angle_desired")
-            velocity = rospy.get_param("control_node/joint_velocity_desired")
-            return position, velocity
+        """
+        Getter of desired joint anlges and desired joint velocities
+        """  
+        position = rospy.get_param("control_node/joint_angle_desired")
+        velocity = rospy.get_param("control_node/joint_velocity_desired")
+        return position, velocity
             
     def publish(self):
+        """
+        Main method coordinating the publishing and getting the new desired pose.
+        """
         r = rospy.Rate(self.rate)
         position, velocity = self.get_joint_state_desired()
 

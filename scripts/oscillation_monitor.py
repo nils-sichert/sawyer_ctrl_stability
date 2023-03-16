@@ -7,8 +7,12 @@ import rospy
 from sensor_msgs.msg import PointCloud, JointState
 from geometry_msgs.msg import Point32
 
-class calback():
+class FFT_plotter():
     def __init__(self) -> None:
+        """
+        Class is plotting FFT data (frequency, magnitude) for each joint.
+        TODO debug for loops -> redundant
+        """
         self.xdata_0 = 0
         self.ydata_0 = 0
         self.xdata_1 = 0
@@ -53,53 +57,53 @@ class calback():
             rospy.Subscriber(topic, JointState, method_ls[i])
 
     def callback_0(self, data):
-        self.xdata_0 = []*len(data.position)
-        self.ydata_0 = []*len(data.position)
-        for i in range(len(data.position)):
-            self.xdata_0 = list(data.position)
-            self.ydata_0 = list(data.velocity)
+        """
+        Callback of FFT data for joint 0.
+        """
+        self.xdata_0 = list(data.position)
+        self.ydata_0 = list(data.velocity)
     
     def callback_1(self, data):
-        self.xdata_1 = []*len(data.position)
-        self.ydata_1 = []*len(data.position)
-        for i in range(len(data.position)):
-            self.xdata_1 = list(data.position)
-            self.ydata_1 = list(data.velocity)
+        """
+        Callback of FFT data for joint 1.
+        """
+        self.xdata_1 = list(data.position)
+        self.ydata_1 = list(data.velocity)
     
     def callback_2(self, data):
-        self.xdata_2 = []*len(data.position)
-        self.ydata_2 = []*len(data.position)
-        for i in range(len(data.position)):
-            self.xdata_2 = list(data.position)
-            self.ydata_2 = list(data.velocity)
+        """
+        Callback of FFT data for joint 2.
+        """
+        self.xdata_2 = list(data.position)
+        self.ydata_2 = list(data.velocity)
 
     def callback_3(self, data):
-        self.xdata_3 = []*len(data.position)
-        self.ydata_3 = []*len(data.position)
-        for i in range(len(data.position)):
-            self.xdata_3 = list(data.position)
-            self.ydata_3 = list(data.velocity)
+        """
+        Callback of FFT data for joint 3.
+        """
+        self.xdata_3 = list(data.position)
+        self.ydata_3 = list(data.velocity)
 
     def callback_4(self, data):
-        self.xdata_4 = []*len(data.position)
-        self.ydata_4 = []*len(data.position)
-        for i in range(len(data.position)):
-            self.xdata_4 = list(data.position)
-            self.ydata_4 = list(data.velocity)
+        """
+        Callback of FFT data for joint 4.
+        """
+        self.xdata_4 = list(data.position)
+        self.ydata_4 = list(data.velocity)
 
     def callback_5(self, data):
-        self.xdata_5 = []*len(data.position)
-        self.ydata_5 = []*len(data.position)
-        for i in range(len(data.position)):
-            self.xdata_5 = list(data.position)
-            self.ydata_5 = list(data.velocity)
+        """
+        Callback of FFT data for joint 5.
+        """
+        self.xdata_5 = list(data.position)
+        self.ydata_5 = list(data.velocity)
 
     def callback_6(self, data):
-        self.xdata_6 = []*len(data.position)
-        self.ydata_6 = []*len(data.position)
-        for i in range(len(data.position)):
-            self.xdata_6 = list(data.position)
-            self.ydata_6 = list(data.velocity)
+        """
+        Callback of FFT data for joint 6.
+        """
+        self.xdata_6 = list(data.position)
+        self.ydata_6 = list(data.velocity)
 
     def get_x(self):
         return self.xdata_0, self.xdata_1, self.xdata_2, self.xdata_3, self.xdata_4, self.xdata_5, self.xdata_6
@@ -152,5 +156,5 @@ class calback():
         ani = animation.FuncAnimation(self.fig, self.animate, interval=100)
         plt.show()
 
-plotter = calback()
+plotter = FFT_plotter()
 plotter.run()

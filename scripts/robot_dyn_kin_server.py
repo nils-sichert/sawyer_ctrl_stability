@@ -18,10 +18,8 @@ from intera_interface import CHECK_VERSION
 
 class Robot_dynamic_kinematic_server():
 
-    def __init__(self, limb):
+    def __init__(self, limb, rate):
         rospy.loginfo("[Robot Kin_Dyn]: Initializing Robot dynamic and kinematic server")
-        #TODO ROS_SET: passed as default option when init class
-        # rospy.init_node('Robot_dyn_kin_server', anonymous=True)        
 
         # create limb instance
         self._limb = intera_interface.Limb(limb)
@@ -30,9 +28,9 @@ class Robot_dynamic_kinematic_server():
     
         ########## Robot initialisation ##########
         # Instance Robotic Chain
-        # TODO Put in seperate script dyn/kin in script (robot_dyn_kin.py)
+        # TODO automatic path
         #urdf_filepath = os.path.abspath(os.path.join(os.path.abspath(__file__), os.pardir, os.pardir, os.pardir, 'sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'))
-        urdf_filepath = '/home/nilssicherts/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'
+        urdf_filepath = '/home/nilssichert/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()
@@ -42,7 +40,7 @@ class Robot_dynamic_kinematic_server():
         self.dyn_kdl = kdl.ChainDynParam(self._robot_chain, self.grav_vector)
         self._joint_names = self._limb.joint_names()
         
-      
+
         # verify robot is enabled
         rospy.loginfo("[Robot Kin_Dyn]: Getting robot state... ")
         self._rs = intera_interface.RobotEnable(CHECK_VERSION)
@@ -50,6 +48,7 @@ class Robot_dynamic_kinematic_server():
         rospy.loginfo("[Robot Kin_Dyn]: Enabling robot... ")
         self._rs.enable()
         rospy.loginfo("[Robot Kin_Dyn]: Running. Ctrl-c to quit")
+
 
         # Robot limit and safety
         self.joint_angle_limit_upper = np.atleast_2d(np.array(self._limits.get_joint_upper_limits(self._joint_names)))
@@ -60,7 +59,7 @@ class Robot_dynamic_kinematic_server():
         self.joint_efforts_limit_upper = np.atleast_2d(np.array(self._limits.get_joint_effort_limits(self._joint_names)))
         self.joint_efforts_limit_lower = - np.atleast_2d(np.array(self._limits.get_joint_effort_limits(self._joint_names)))
         
-        
+
         # Instance state varibles
         self.jacobian = np.zeros((6,7))
         self.jacobian_prev = np.zeros((6,7))
@@ -68,8 +67,8 @@ class Robot_dynamic_kinematic_server():
         self.periodTime = 0.01
 
         # control parameters
-        self.rate = 100 # Controlrate - 100Hz
-        self._missed_cmd = 1 # Missed cycles before triggering timeout
+        self.rate = rate # Controlrate - 100Hz
+        self._missed_cmd = 3 # Missed cycles before triggering timeout
 
         # Set limb controller timeout to return to Sawyer position controller
         self._limb.set_command_timeout((1.0 / self.rate) * self._missed_cmd)
@@ -87,7 +86,7 @@ class Robot_dynamic_kinematic_server():
         It can calculate the FK for given joint_values. If no are given, the methods takes the actual values 
         of the Robot. The link number can be choosen to calculate the FK for the given link.
         Parameters: type (str), joint_values (7x1), link_number (int)
-        Return: pos_vec (3x1), rot_mat (3x3), pose (6x1)
+        Return: transformation matrix (4x4)
         """
         endeffec_frame = kdl.Frame()
         if type == 'positions':
@@ -103,7 +102,6 @@ class Robot_dynamic_kinematic_server():
 
         if kinematics_status >= 0:
             p = endeffec_frame.p
-            # pos_vec = [p.x(),p.y(),p.z()]
             M = endeffec_frame.M
             transformation_mat = np.array([[M[0,0], M[0,1], M[0,2], p.x()],
                             [M[1,0], M[1,1], M[1,2], p.y()], 
@@ -243,19 +241,26 @@ class Robot_dynamic_kinematic_server():
         return new_limb_torque
 
     def move2position(self, position):
+        """
+        Send command to robot SDK to move to joint pose
+        Parameters: desired position (list: 7x1)
+        Return: None
+        """
         self._limb.move_to_joint_positions(position, timeout = 4)
         return
 
     def move2neutral(self, timeout, speed):
+        """
+        Send command to robot SDK to move to neutral pose
+        Parameters: time to wait untill movement is done (float), speed of movement - % [0,1] (float)
+        Return: None
+        """
         self._limb.move_to_neutral(timeout, speed)
         return
 
     
-
-    
     ############ Getter methods ############ 
 
- 
     def get_jacobian_prev(self):
         """
         Gets previous jacobian matrix.
@@ -265,18 +270,43 @@ class Robot_dynamic_kinematic_server():
         return self.jacobian_prev   #copy.deepcopy(self.jacobian_prev)
 
     def get_djacobian(self):
-        return self.djacobian       #copy.deepcopy(self.djacobian)
+        """
+        Gets derivate of jacobian matrix.
+        Parameters: None
+        Return: derivate jacobian matrix (6x7)
+        """
+        return self.djacobian       
     
     def get_jacobian(self):
-        return self.jacobian        #copy.deepcopy(self.jacobian)
+        """
+        Gets jacobian matrix.
+        Parameters: None
+        Return: jacobian matrix (6x7)
+        """
+        return self.jacobian        
 
     def get_coriolis(self):
+        """
+        Gets coriolis compensation vector.
+        Parameters: None
+        Return: coriolis vector (7x1)
+        """
         return self.calc_coriolis().T
 
     def get_mass(self):
+        """
+        Gets mass matrix.
+        Parameters: None
+        Return: mass matrix (7x7)
+        """
         return self.calc_mass()
 
     def get_gravity_compensation(self):
+        """
+        Gets gravity compensation vector.
+        Parameters: None
+        Return: gravity compensation vector (7x1)
+        """
         return self.calc_gravity().T
 
     def get_current_positions_cartesianSpace(self, type='positions'):
@@ -303,34 +333,37 @@ class Robot_dynamic_kinematic_server():
         return velocity
 
     def get_periodTime(self):
-        return self.periodTime #copy.deepcopy(self.periodTime)
+        return self.periodTime 
     
     def get_current_DisplayAngle(self):
         return self._head.pan()
     
     def get_joint_limits(self):
-        upper_limit = self.joint_angle_limit_upper #copy.deepcopy(self.joint_angle_limit_upper)
-        lower_limit = self.joint_anlge_limit_lower #copy.deepcopy(self.joint_anlge_limit_lower)
+        upper_limit = self.joint_angle_limit_upper 
+        lower_limit = self.joint_anlge_limit_lower 
         return upper_limit, lower_limit
 
     def get_torque_limits(self):
-        upper_limit = self.joint_efforts_limit_upper #copy.deepcopy(self.joint_efforts_limit_upper)
-        lower_limit = self.joint_efforts_limit_lower #copy.deepcopy(self.joint_efforts_limit_lower)
+        upper_limit = self.joint_efforts_limit_upper 
+        lower_limit = self.joint_efforts_limit_lower 
         return upper_limit, lower_limit
     
     def get_velocity_limits(self):
-        upper_limit = self.joint_velocity_limits_upper #copy.deepcopy(self.joint_velocity_limits_upper)
-        lower_limit = self.joint_velocity_limits_lower #copy.deepcopy(self.joint_velocity_limits_lower)
+        upper_limit = self.joint_velocity_limits_upper 
+        lower_limit = self.joint_velocity_limits_lower 
         return upper_limit, lower_limit
     
     def get_joint_names(self):
-        return self._joint_names #copy.deepcopy(self._joint_names)
+        return self._joint_names 
     
     def get_cartesian_acceleration_EE(self):
-        # Acceleration Vector
+        # TODO improve
         return np.zeros((6,1))
     
     def get_current_cartesian_pose(self):
+        """
+        TODO redundance
+        """
         tf_mat = self.calc_pose_cartesianSpace('positions')
         position_cart = np.atleast_2d([tf_mat[0,3], tf_mat[1,3], tf_mat[2,3]]).T
         euler_cart = np.atleast_2d(tft.euler_from_matrix(tf_mat)).T
@@ -340,9 +373,17 @@ class Robot_dynamic_kinematic_server():
     ############ Update methods ############
 
     def update_periodTime(self, periodTime):
+        """
+        Update time of since last update.
+        Parameters: time since last period (sec - float)
+        Return: None
+        """
         self.periodTime = periodTime
 
     def update_robot_states(self, periodTime):
+        """
+        Updates jacobian and period time.
+        """
         self.update_periodTime(periodTime)
         self.calc_jacobian()
         self.calc_djacobian()
@@ -379,7 +420,6 @@ class Robot_dynamic_kinematic_server():
         """
         self._head.set_pan(jointangle, speed = 1.0, timeout = 10.0, active_cancellation = False)
   
-   
   
 def main():
     robot_dyn_kin_server = Robot_dynamic_kinematic_server()
@@ -395,7 +435,6 @@ def main():
     print(robot_dyn_kin_server.get_current_positions_cartesianSpace())
     print(robot_dyn_kin_server.get_current_velocities_cartesianSpace())
     
-
 if __name__ == "__main__":
     try: 
         main()

@@ -8,7 +8,6 @@ from sensor_msgs.msg import JointState, PointCloud
 from geometry_msgs.msg import Point32
 from std_msgs.msg import Empty, Header, String
 from intera_core_msgs.msg import JointLimits, SEAJointState
-import sys, os
 import tf.transformations as tft
 
 from cartesianspace_controller import pd_impedance_cartesian, dlr_impedance_cartesian

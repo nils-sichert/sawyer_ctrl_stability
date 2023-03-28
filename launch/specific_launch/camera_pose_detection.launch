@@ -3,7 +3,7 @@
 
   
   <!-- Load node-->
-  <node pkg="sawyer_ctrl_stability" type="ros_pose_spin.py" name="ros_pose" />
+  <node pkg="sawyer_ctrl_stability" type="camera_pose_detection.py" name="ros_pose" />
   
   <!-- Load configuration-->
   <rosparam param="/mediapipe/start"> True</rosparam>

@@ -70,7 +70,7 @@ class Head_light_manager():
         r = rospy.Rate(self.rate)
         while not rospy.is_shutdown():
             self.set_color()
-            r.sleep(self.rate)
+            r.sleep()
 
 if __name__ == '__main__':
     lm = Head_light_manager()

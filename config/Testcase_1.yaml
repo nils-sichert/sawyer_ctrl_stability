@@ -5,11 +5,11 @@ control_node: {
   joint_velocity_desired: [0,0,0,0,0,0,0],
   selected_filter_number: 3,
   Kd_upper_limit: [100,80,60,20,10,10,10],
-  Kd_lower_limit: [10,10,10,10,10,10,10,],
-  Dd_upper_limit: [1],
+  Kd_lower_limit: [10,10,10,7,5,5,5,],
+  Dd_upper_limit: [1.2],
   Dd_lower_limit: [1],
   Lowpass_coeff: 0.6,
-  move2neutral: false,
+  move2neutral: true,
   suppress_self_collision_detection: false,
   suppress_contact_collision_detection: false,
 }
@@ -26,7 +26,7 @@ stiffness_manager: {
 }
 
 mediapipe: {
-  start: false,
+  start: true,
 }
 nullspace: {
   is_locked: false,

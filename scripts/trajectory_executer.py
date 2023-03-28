@@ -3,6 +3,7 @@
 import rospy
 import numpy as np
 from sensor_msgs.msg import JointState
+import csv
 
 class trajectoy_executer():
     """
@@ -15,6 +16,11 @@ class trajectoy_executer():
         self._pub_joint_angle_desi = rospy.Publisher("/control_node/joint_states_desi", JointState, queue_size=10)
         self.rate = 400 #Hz
         self.counter = 0
+        self.joint_angle = []
+        with open("/home/nilssichert/ros_ws/src/sawyer_ctrl_stability/scripts/trajectory/square_traj_joint.csv", newline='') as f:
+            reader = csv.reader(f,delimiter=',')
+            for row in reader:
+                self.joint_angle.append(row)
 
     def publish_jointstates(self, position, velocity, publisher: rospy.Publisher):
         """
@@ -33,19 +39,33 @@ class trajectoy_executer():
         velocity = rospy.get_param("control_node/joint_velocity_desired")
         return position, velocity
             
+    def publish_traj(self, r):
+        for index, value in enumerate(self.joint_angle):
+            position = [float(x) for x in value]
+            velocity = [0,0,0,0,0,0,0]
+            self.publish_jointstates(position, velocity, self._pub_joint_angle_desi)
+            r.sleep()
+
+
     def publish(self):
         """
         Main method coordinating the publishing and getting the new desired pose.
         """
         r = rospy.Rate(self.rate)
-        position, velocity = self.get_joint_state_desired()
+        trajectory_method = rospy.get_param("trajectory_executer/method", "path")
+        
 
         while not rospy.is_shutdown():
-             self.publish_jointstates(position, velocity, self._pub_joint_angle_desi)
-             self.counter += 1
-             if self.counter >= self.rate/2:
-                  position, velocity = self.get_joint_state_desired()
-             r.sleep()
+            if trajectory_method == "path":
+                #path = rospy.get_param("trajectory_executer/path")
+                rospy.logwarn("[Traj. executer]: Executing path")
+                self.publish_traj(r)
+
+            else:
+                counter = 0
+                position, velocity = self.get_joint_state_desired()
+                self.publish_jointstates(position, velocity, self._pub_joint_angle_desi)
+            r.sleep()
     
 if __name__ =="__main__":
     trajectory_ex = trajectoy_executer()

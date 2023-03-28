@@ -152,12 +152,12 @@ class tracker:
         while not rospy.is_shutdown():
             start = rospy.get_param("/mediapipe/start", False)
             if start == True:
-                critical_angle = rospy.get_param("/mediapipe/critical_angle", 10)
-                ret, frame = self.cap.read()
+                critical_angle = rospy.get_param("/stiffness_manager/critical_angle", 10)
+                ret, frame = self.cap.read(critical_angle)
                 if not ret: 
                     continue
-                # image = self.process_img(frame, critical_angle)
-                # cv2.imshow("pose",image)
+                image = self.process_img(frame, critical_angle)
+                cv2.imshow("pose",image)
                 cv2.waitKey(1)
             r.sleep()
 

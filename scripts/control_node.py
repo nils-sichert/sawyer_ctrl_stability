@@ -10,10 +10,15 @@ from std_msgs.msg import Empty, Header, String
 from intera_core_msgs.msg import JointLimits, SEAJointState
 import tf.transformations as tft
 
+#import cartesianspace_controller
+#import jointspace_controller
 from cartesianspace_controller import pd_impedance_cartesian, dlr_impedance_cartesian
 from jointspace_controller import pd_impedance_jointspace, spring_damper_jointspace
+#import configuration_server
 from configuration_server import Configuration_server
+#import robot_dyn_kin_server
 from robot_dyn_kin_server import Robot_dynamic_kinematic_server
+#import safety_regulator
 from safety_regulator import Safety_regulator
 from scipy.spatial.transform import Rotation as R
 
@@ -24,9 +29,14 @@ import cProfile
 
 
 """
-Please add Bugs and Todos here:s
+Please add Bugs and Todos here:
+Necessary ToDos:
 TODO add switch between cartesian pose and joint space pose
 TODO improve cartesian pose getter and setter
+
+Nice to have ToDos:
+TODO Detect URDF path automatically
+TODO Safety regulator: implement behavior when getting close to joint angle limits releasing torque.
 """
 
 class controller():

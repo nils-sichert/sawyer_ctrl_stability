@@ -169,7 +169,8 @@ catkin_install_python(PROGRAMS
   scripts/configuration_server.py
   scripts/head_light_manager.py
   scripts/stiffness_manager.py
-  scripts/trajectory_publisher_jointspace.py
+  scripts/trajectory_executer.py
+  scripts/camera_pose_detection.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 

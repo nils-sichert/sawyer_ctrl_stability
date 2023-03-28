@@ -11,7 +11,6 @@ class FFT_plotter():
     def __init__(self) -> None:
         """
         Class is plotting FFT data (frequency, magnitude) for each joint.
-        TODO debug for loops -> redundant
         """
         self.xdata_0 = 0
         self.ydata_0 = 0

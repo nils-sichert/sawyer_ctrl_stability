@@ -103,7 +103,6 @@ class Safety_regulator():
                             rospy.loginfo("[Safety regulator]: Oscillation shutdown at joint: \n{0}\n".format(j))
                             rospy.loginfo("[Safety regulator]: Please control values for stifness and damping.")
                             break
-                        # TODO add reset self.oscillation_observer_activ flag to be able to restart controller
         if flag == False:
             self.reset_watchdig_oscillation()
         return flag, power, frequency

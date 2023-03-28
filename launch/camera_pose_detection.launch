@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+
+  
+  <!-- Load node-->
+  <node pkg="sawyer_ctrl_stability" type="ros_pose_spin.py" name="ros_pose" />
+  
+  <!-- Load configuration-->
+  <rosparam param="/mediapipe/start"> True</rosparam>
+  <rosparam param="/mediapipe/critical_angle"> 5</rosparam>
+
+</launch>

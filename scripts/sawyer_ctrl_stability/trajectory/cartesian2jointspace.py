@@ -9,7 +9,7 @@ import os
 
 rospy.init_node("IK_translater")
 tmp = os.path.dirname(__file__)
-def ik_service_client(position, orientation, limb = "right", use_advanced_options = False):
+def ik_service_client(position, orientation, limb = "right", use_advanced_options = True):
     ns = "ExternalTools/" + limb + "/PositionKinematicsNode/IKService"
     iksvc = rospy.ServiceProxy(ns, SolvePositionIK)
     ikreq = SolvePositionIKRequest()

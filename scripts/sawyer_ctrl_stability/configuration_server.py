@@ -65,7 +65,7 @@ class Configuration_server():
         """
         Flag triggering the robot moving to neutral pose, if true movement initalized.
         """
-        return rospy.get_param("control_node/move2neutral")
+        return rospy.get_param("/control_node/move2neutral")
     
     def get_oscillation_window_len(self):
         """

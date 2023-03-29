@@ -162,11 +162,6 @@ include_directories(
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
   scripts/control_node.py
-  scripts/cartesianspace_controller.py
-  scripts/jointspace_controller.py
-  scripts/robot_dyn_kin_server.py
-  scripts/safety_regulator.py
-  scripts/configuration_server.py
   scripts/head_light_manager.py
   scripts/stiffness_manager.py
   scripts/trajectory_executer.py

@@ -10,16 +10,12 @@ from std_msgs.msg import Empty, Header, String
 from intera_core_msgs.msg import JointLimits, SEAJointState
 import tf.transformations as tft
 
-#import cartesianspace_controller
-#import jointspace_controller
-from cartesianspace_controller import pd_impedance_cartesian, dlr_impedance_cartesian
-from jointspace_controller import pd_impedance_jointspace, spring_damper_jointspace
-#import configuration_server
-from configuration_server import Configuration_server
-#import robot_dyn_kin_server
-from robot_dyn_kin_server import Robot_dynamic_kinematic_server
-#import safety_regulator
-from safety_regulator import Safety_regulator
+
+from sawyer_ctrl_stability.cartesianspace_controller import pd_impedance_cartesian, dlr_impedance_cartesian
+from sawyer_ctrl_stability.jointspace_controller import pd_impedance_jointspace, spring_damper_jointspace
+from sawyer_ctrl_stability.configuration_server import Configuration_server
+from sawyer_ctrl_stability.robot_dyn_kin_server import Robot_dynamic_kinematic_server
+from sawyer_ctrl_stability.safety_regulator import Safety_regulator # by using sawyer_ctrl_stability folder in package avoid bug of ros noetic
 from scipy.spatial.transform import Rotation as R
 
 from matplotlib import pyplot as plt
@@ -473,11 +469,13 @@ class controller():
             if controller_flag == False:              
                 self.set_initalstate(self.robot_dyn_kin.get_current_joint_angles_list())
                 self.set_cartesian_pose(self.robot_dyn_kin.get_current_cartesian_pose())
+                self.robot_dyn_kin.set_limb_timeout(self.rate, 0)
                 self.safety_regulator.reset_watchdig_oscillation()
 
             if controller_flag == True:
 
-                ### GET current robot state ###
+                ### GET current robot state #
+                self.robot_dyn_kin.set_limb_timeout(self.rate, 50)
                 cur_joint_angle = self.robot_dyn_kin.get_current_joint_angles()         # numpy 7x1
                 cur_joint_velocity = self.robot_dyn_kin.get_current_joint_velocities()  # numpy 7x1
                 mass = self.robot_dyn_kin.get_mass()    # numpy 7x7 

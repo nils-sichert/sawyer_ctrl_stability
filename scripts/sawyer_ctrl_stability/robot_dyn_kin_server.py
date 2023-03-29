@@ -18,7 +18,7 @@ from intera_interface import CHECK_VERSION
 
 class Robot_dynamic_kinematic_server():
 
-    def __init__(self, limb, rate):
+    def __init__(self, limb, rate, missed_cmd=50):
         rospy.loginfo("[Robot Kin_Dyn]: Initializing Robot dynamic and kinematic server")
 
         # create limb instance
@@ -30,7 +30,8 @@ class Robot_dynamic_kinematic_server():
         # Instance Robotic Chain
         # TODO automatic path
         #urdf_filepath = os.path.abspath(os.path.join(os.path.abspath(__file__), os.pardir, os.pardir, os.pardir, 'sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'))
-        urdf_filepath = '/home/nilssichert/ros_ws/src/sawyer_robot/sawyer_description/urdf/sawyer_base.urdf.xacro'
+        tmp = os.path.dirname(__file__)
+        urdf_filepath = os.path.join(tmp,'urdf/sawyer.urdf')
         (ok, robot) = urdf.treeFromFile(urdf_filepath)
         self._robot_chain = robot.getChain('right_arm_base_link', 'right_l6')
         self._nrOfJoints = self._robot_chain.getNrOfJoints()
@@ -66,12 +67,10 @@ class Robot_dynamic_kinematic_server():
         self.djacobian = np.zeros((6,7))
         self.periodTime = 0.01
 
-        # control parameters
-        self.rate = rate # Controlrate - 100Hz
-        self._missed_cmd = 3 # Missed cycles before triggering timeout
+        # set control timeout
+        self.set_limb_timeout(rate,missed_cmd)
+        
 
-        # Set limb controller timeout to return to Sawyer position controller
-        self._limb.set_command_timeout((1.0 / self.rate) * self._missed_cmd)
         
     def clean_shutdown(self):
         """
@@ -419,6 +418,12 @@ class Robot_dynamic_kinematic_server():
         @type active_cancellation: bool
         """
         self._head.set_pan(jointangle, speed = 1.0, timeout = 10.0, active_cancellation = False)
+
+    def set_limb_timeout(self, rate, missed_cmd):
+
+        # Set limb controller timeout to return to Sawyer position controller
+        self._limb.set_command_timeout((1.0 / rate) * missed_cmd)
+
   
   
 def main():

@@ -4,6 +4,7 @@ import rospy
 import numpy as np
 from sensor_msgs.msg import JointState
 import csv
+import os
 
 class trajectoy_executer():
     """
@@ -17,7 +18,9 @@ class trajectoy_executer():
         self.rate = 400 #Hz
         self.counter = 0
         self.joint_angle = []
-        with open("/home/nilssichert/ros_ws/src/sawyer_ctrl_stability/scripts/trajectory/square_traj_joint.csv", newline='') as f:
+        tmp = os.path.dirname(__file__)
+        
+        with open(os.path.join(tmp, 'sawyer_ctrl_stability/trajectory/square_traj_joint.csv')) as f:
             reader = csv.reader(f,delimiter=',')
             for row in reader:
                 self.joint_angle.append(row)

@@ -5,14 +5,16 @@ from sensor_msgs.msg import JointState
 import csv
 from intera_core_msgs.srv import (SolvePositionIK, SolvePositionIKRequest,)
 import tqdm
+import os
 
 rospy.init_node("IK_translater")
+tmp = os.path.dirname(__file__)
 def ik_service_client(position, orientation, limb = "right", use_advanced_options = False):
     ns = "ExternalTools/" + limb + "/PositionKinematicsNode/IKService"
     iksvc = rospy.ServiceProxy(ns, SolvePositionIK)
     ikreq = SolvePositionIKRequest()
     hdr = Header(stamp=rospy.Time.now(), frame_id='base')
-
+    
     poses = {
         'right': PoseStamped(
             header=hdr,
@@ -94,7 +96,7 @@ def ik_service_client(position, orientation, limb = "right", use_advanced_option
 
 def convert():
     joint_list = []
-    with open("/home/nilssichert/ros_ws/src/sawyer_ctrl_stability/scripts/trajectory/square_traj_cart.csv", newline='') as f:
+    with open(os.path.join(tmp, 'square_traj_cart.csv'), newline='') as f:
         reader = csv.reader(f,delimiter=',')
         for row in reader:
             position = [float(row[0]), float(row[1]), float(row[2])]
@@ -102,7 +104,7 @@ def convert():
             list_tmp = ik_service_client(position, orientation)
             joint_list.append(list_tmp)
     
-    with open("/home/nilssichert/ros_ws/src/sawyer_ctrl_stability/scripts/trajectory/square_traj_joint.csv", 'w', newline='') as file:
+    with open(os.path.join(tmp,'square_traj_joint.csv'), 'w', newline='') as file:
         writer = csv.writer(file, delimiter=',')
         for i in range(len(joint_list)):
             writer.writerow([joint_list[i][0],joint_list[i][1],joint_list[i][2],joint_list[i][3],joint_list[i][4],joint_list[i][5],joint_list[i][6]])

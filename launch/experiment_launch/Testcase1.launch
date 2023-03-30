@@ -1,13 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <launch>
-
-  
-  <include file="$(find sawyer_gazebo)/launch/sawyer_world.launch">
-    <arg name="electric_gripper" value="false"/>
-  </include>
-
   <!-- Load configuration-->
-  <rosparam file="$(find sawyer_ctrl_stability)/config/Testcase_1.yaml" command="load"/>
+  <rosparam file="$(find sawyer_ctrl_stability)/config/Testcase_1.yaml" />
   
   <node pkg="sawyer_ctrl_stability" type="control_node.py" name="control_node" />
   <node pkg="sawyer_ctrl_stability" type="stiffness_manager.py" name="stiffness_manager" />
@@ -15,7 +9,9 @@
   <node pkg="sawyer_ctrl_stability" type="head_light_manager.py" name="headlight" />
   <node pkg="sawyer_ctrl_stability" type="camera_pose_detection.py" name="camera_pose_detection"/>
 
-  <!--include file="$(find sawyer_ctrl_stability)/launch/specific_launch/debug_Plots.launch">
-  </include/-->
+
+
+  <include file="$(find sawyer_ctrl_stability)/launch/specific_launch/debug_Plots.launch">
+  </include>
 
 </launch>

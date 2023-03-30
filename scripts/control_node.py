@@ -463,7 +463,7 @@ class controller():
                 timeout = 5
                 speed = 0.2
                 self.robot_dyn_kin.move2neutral(timeout, speed)
-                rospy.loginfo("[Control_node]: Moved to inital pose.")
+                rospy.logwarn("[Control_node]: Moved to inital pose.")
                 self.settings.set_move2neutral(False)
         
             if controller_flag == False:              
@@ -475,7 +475,7 @@ class controller():
             if controller_flag == True:
 
                 ### GET current robot state #
-                self.robot_dyn_kin.set_limb_timeout(self.rate, 50)
+                self.robot_dyn_kin.set_limb_timeout(self.rate, 1)
                 cur_joint_angle = self.robot_dyn_kin.get_current_joint_angles()         # numpy 7x1
                 cur_joint_velocity = self.robot_dyn_kin.get_current_joint_velocities()  # numpy 7x1
                 mass = self.robot_dyn_kin.get_mass()    # numpy 7x7 

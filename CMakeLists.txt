@@ -164,7 +164,7 @@ catkin_install_python(PROGRAMS
   scripts/control_node.py
   scripts/head_light_manager.py
   scripts/stiffness_manager.py
-  scripts/trajectory_executer.py
+  scripts/trajectory_executor.py
   scripts/camera_pose_detection.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )

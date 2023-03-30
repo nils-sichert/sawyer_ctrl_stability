@@ -18,7 +18,7 @@ from intera_interface import CHECK_VERSION
 
 class Robot_dynamic_kinematic_server():
 
-    def __init__(self, limb, rate, missed_cmd=50):
+    def __init__(self, limb, rate, missed_cmd=2):
         rospy.loginfo("[Robot Kin_Dyn]: Initializing Robot dynamic and kinematic server")
 
         # create limb instance

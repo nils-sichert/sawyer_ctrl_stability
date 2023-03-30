@@ -9,13 +9,13 @@ control_node: {
   Dd_upper_limit: [1],
   Dd_lower_limit: [1],
   Lowpass_coeff: 0.6,
-  move2neutral: false,
+  move2neutral: true,
   suppress_self_collision_detection: false,
   suppress_contact_collision_detection: false,
 }
 
 oscillation_guard: {
-  window_length: 30,
+  window_length: 100,
   corner_frequency: 10,
   magnitude_limit: 10,
 }
@@ -38,4 +38,7 @@ named_poses: {
       neutral: [-0.155, 0.126, -1.638, 1.509, -1.418, 1.538, -1.40],
     }
   }
+}
+trajectory_executer: {
+  method: steady,
 }

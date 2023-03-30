@@ -124,7 +124,7 @@ class tracker:
             corners, ids, rejectedImgPoints = self.detector.detectMarkers(original_img)  
             
             dists = []
-            if (len(corners)!=0):
+            if len(corners)!=0 and lm is not None:
                 for corner in corners:
                     centerY = int((corner[0][0][1] + corner[0][2][1]) / 2)
                     centerX = int((corner[0][0][0] + corner[0][2][0]) / 2)
@@ -150,9 +150,9 @@ class tracker:
     def run(self):
         r = rospy.Rate(self.rate)
         while not rospy.is_shutdown():
-            start = rospy.get_param("/mediapipe/start", False)
+            start = rospy.get_param("/mediapipe/start", True)
             if start == True:
-                critical_angle = rospy.get_param("/stiffness_manager/critical_angle", 10)
+                critical_angle = rospy.get_param("/stiffness_manager/offset_angle", default=10) #limit to instability in degree
                 ret, frame = self.cap.read(critical_angle)
                 if not ret: 
                     continue

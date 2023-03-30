@@ -10,6 +10,6 @@
   <rosparam file="$(find sawyer_ctrl_stability)/config/inital_config.yaml" command="load"/>
   
   <node pkg="sawyer_ctrl_stability" type="stiffness_manager.py" name="stiffness_manager" />
-  <node pkg="sawyer_ctrl_stability" type="trajectory_executer.py" name="trajectory_publisher" />
+  <node pkg="sawyer_ctrl_stability" type="trajectory_executor.py" name="trajectory_publisher" />
 
 </launch>

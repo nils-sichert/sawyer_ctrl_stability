@@ -55,17 +55,15 @@ class trajectoy_executer():
         Main method coordinating the publishing and getting the new desired pose.
         """
         r = rospy.Rate(self.rate)
-        trajectory_method = rospy.get_param("trajectory_executer/method", "path")
         
-
         while not rospy.is_shutdown():
+            trajectory_method = rospy.get_param("trajectory_executor/method")
             if trajectory_method == "path":
                 #path = rospy.get_param("trajectory_executer/path")
                 rospy.logwarn("[Traj. executer]: Executing path")
                 self.publish_traj(r)
 
             else:
-                counter = 0
                 position, velocity = self.get_joint_state_desired()
                 self.publish_jointstates(position, velocity, self._pub_joint_angle_desi)
             r.sleep()

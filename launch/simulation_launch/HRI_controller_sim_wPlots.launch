@@ -11,7 +11,7 @@
   
   <node pkg="sawyer_ctrl_stability" type="control_node.py" name="control_node" />
   <node pkg="sawyer_ctrl_stability" type="stiffness_manager.py" name="stiffness_manager" />
-  <node pkg="sawyer_ctrl_stability" type="trajectory_executer.py" name="trajectory_publisher" />
+  <node pkg="sawyer_ctrl_stability" type="trajectory_executor.py" name="trajectory_publisher" />
 
   <include file="$(find sawyer_ctrl_stability)/launch/specific_launch/debug_Plots.launch">
   </include>

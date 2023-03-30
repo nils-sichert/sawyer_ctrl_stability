@@ -107,7 +107,7 @@ class Robot_dynamic_kinematic_server():
                             [M[2,0], M[2,1], M[2,2], p.z()],
                             [0,0,0,1]])
 
-            return transformation_mat
+            return transformation_mat, p, M
                             
         else:
             return None

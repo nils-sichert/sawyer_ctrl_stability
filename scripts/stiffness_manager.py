@@ -23,10 +23,10 @@ class Stiffness_mangager():
 
         self._sub_media_pipe = rospy.Subscriber('/mediapipe/angle', Float32, self.callback_mediapipe_angle)
         self._sub_joint_velocity = rospy.Subscriber('/robot/joint_states',JointState, self.callback_joint_velocity)
-        self.rate = 1000 # updaterate
+        self.rate = 200 # updaterate
         self._angle = 0
         self._joint_velocity = np.zeros((7,1))
-        self.counter = 2 * self.rate #sec
+        self.counter = 0 #sec
 
     def publish_jointstate(self, position, velocity, publisher: rospy.Publisher):
         """
@@ -58,6 +58,8 @@ class Stiffness_mangager():
                 K_d, D_d = self.calculate_cv_stiffness()    
             elif self.stiffness_calculation_method == "velocity":
                 K_d, D_d = self.calculate_velocity_stiffness()
+            elif self.stiffness_calculation_method == "ramp":
+                K_d, D_d = self.calculate_increasing_stiffness()
             else:
                 rospy.logerr_once("[Stiffness manager]: Wrong calculation method choosen (methods: pose/ velocity)")
                 K_d = self.K_d_upper_limit
@@ -123,6 +125,14 @@ class Stiffness_mangager():
                 if Kd[index] > self.K_d_upper_limit[index]:
                     Kd[index] = self.K_d_upper_limit[index]
                     Dd[index] = self.D_d_upper_limit[index]
+        return Kd, Dd
+
+    def calculate_increasing_stiffness(self):
+        # Debug and oscillation guard test function. DO NOT use for a real stiffness calculation
+        delta_Kd = np.array(self.K_d_upper_limit)-np.array(self.K_d_lower_limit)
+        delta_Dd = np.array(self.D_d_upper_limit)-np.array(self.D_d_lower_limit)
+        Kd = self.K_d_lower_limit + self.counter * delta_Kd/(self.rate*3)
+        Dd = self.D_d_lower_limit + self.counter * delta_Dd/(self.rate*3)
         return Kd, Dd
 
 

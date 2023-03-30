@@ -103,6 +103,7 @@ class controller():
         # Publisher of motor torque setpoints (Outpu of controller)
         self._pub_joint_torques = rospy.Publisher('control_node_debug/setpoints_motor_torque', JointState, queue_size=1)
         
+        self._pub_cartesian_state = rospy.Publisher('control_node_debug/cartesian_EE_state', Jointstate, queue_size=5)
         # Publisher of colors for headlight (setpoint torque: green < 75%, yellow >= 75% <95%, red >=95% of torque limit)        
         self._pub_lightcolor = rospy.Publisher('control_node_debug/color', String, queue_size=1)
 
@@ -492,6 +493,10 @@ class controller():
                 joint_angle_error = self.calc_error_joint(cur_joint_angle, joint_angle_desi)
                 joint_velocity_error = self.calc_error_joint(cur_joint_velocity, joint_velocity_desi)
                 pose_desired = self.get_cartesian_pose_desired().T
+
+                cartesian_pose = self.robot_dyn_kin.
+                cartesian_velocity =
+                self.publish_jointstate()
                 cartesian_pose_error, cartesian_velocity_error = self.calc_error_cart(pose_desired, self.robot_dyn_kin.get_jacobian(), self.robot_dyn_kin.get_current_joint_velocities())
                 cartesian_acceleration = self.robot_dyn_kin.get_cartesian_acceleration_EE()
                 

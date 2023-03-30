@@ -65,7 +65,7 @@ class Stiffness_mangager():
                 K_d = self.K_d_upper_limit
                 D_d = self.D_d_upper_limit
             self.publish_jointstate(K_d, D_d, self._pub_Kd)
-            #rospy.sleep(1/self.rate)
+            rospy.sleep(1/self.rate)
 
     def update_limits(self):
         """

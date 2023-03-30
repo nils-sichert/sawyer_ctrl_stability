@@ -6,7 +6,7 @@ from pyquaternion import Quaternion
 import numpy as np
 from sensor_msgs.msg import JointState, PointCloud
 from geometry_msgs.msg import Point32
-from std_msgs.msg import Empty, Header, String
+from std_msgs.msg import Empty, Header, String, Float64
 from intera_core_msgs.msg import JointLimits, SEAJointState
 import tf.transformations as tft
 
@@ -48,7 +48,7 @@ class controller():
         rospy.loginfo("[Control node]: Initializing node...")
 
         # Control rate
-        self.rate = 100 
+        self.rate = 50
 
         ##### Instances ######
         ## Settings
@@ -103,7 +103,8 @@ class controller():
         # Publisher of motor torque setpoints (Outpu of controller)
         self._pub_joint_torques = rospy.Publisher('control_node_debug/setpoints_motor_torque', JointState, queue_size=1)
         
-        self._pub_cartesian_state = rospy.Publisher('control_node_debug/cartesian_EE_state', Jointstate, queue_size=5)
+        self._pub_cartesian_state = rospy.Publisher('control_node_debug/cartesian_EE_state', JointState, queue_size=5)
+        self._pub_runtime = rospy.Publisher('control_node_debug/runtime', Float64, queue_size = 5)
         # Publisher of colors for headlight (setpoint torque: green < 75%, yellow >= 75% <95%, red >=95% of torque limit)        
         self._pub_lightcolor = rospy.Publisher('control_node_debug/color', String, queue_size=1)
 
@@ -150,6 +151,11 @@ class controller():
     def publish_head_light_color(self, string, publisher: rospy.Publisher):
         msg = String()
         msg.data = string
+        publisher.publish(msg)
+    
+    def publish_runtime(self, float_, publisher: rospy.Publisher):
+        msg = Float64()
+        msg.data = float_
         publisher.publish(msg)
 
     def callback_Kd_Dd(self, data):
@@ -234,35 +240,36 @@ class controller():
     def calc_error_cart(self, pose_desi, jacobian, current_joint_velocity, velocity_desired = [0,0,0,0,0,0],):
         """
         Calculation of position-, orientation-, velociteserrors and acceleration
-        Parameters:  desired pose (pose_desi: 6x1), jacobian matrix (jacobian: 6x7), 
+        Parameters:  desired pose (pose_desi: 7x1), jacobian matrix (jacobian: 6x7), 
                     current joint velocity (current_joint_velocity: 6x1), desired joint velocity (velocity_desired: 6x1)
         Return: error pose (6x1), error velocities (6x1), acceleration (6x1)
         """
         # input current pose
-        tf_mat_cur = self.robot_dyn_kin.get_current_cartesian_tf()
+        # tf_mat_cur = self.robot_dyn_kin.get_current_cartesian_tf()
         
-        # Position Error 
-        pos_x, pos_y, pos_z = tf_mat_cur[0,3], tf_mat_cur[1,3], tf_mat_cur[2,3]
+        # # Position Error 
+        # pos_x, pos_y, pos_z = tf_mat_cur[0,3], tf_mat_cur[1,3], tf_mat_cur[2,3]
 
-        error_position = np.atleast_2d([pos_x-pose_desi[0], pos_y-pose_desi[1], pos_z-pose_desi[2]])
+        # error_position = np.atleast_2d([pos_x-pose_desi[0], pos_y-pose_desi[1], pos_z-pose_desi[2]])
 
-        # Orientation Error
-        quat_c = np.atleast_2d(tft.quaternion_from_matrix(tf_mat_cur)).T
+        # # Orientation Error
+        # quat_c = np.atleast_2d(tft.quaternion_from_matrix(tf_mat_cur)).T
 
-        # calculate quaternions desired position / euler sequence xyz
-        quat_d = np.atleast_2d(tft.quaternion_from_euler(pose_desi[3], pose_desi[4], pose_desi[5])).T # roll. pitch, yaw
+        # # calculate quaternions desired position / euler sequence xyz
+        # quat_d = np.atleast_2d(tft.quaternion_from_euler(pose_desi[3], pose_desi[4], pose_desi[5])).T # roll. pitch, yaw
         
-        quat_C = Quaternion(-quat_c).conjugate
-        quat_D = Quaternion(quat_d)
+        # quat_C = Quaternion(-quat_c).conjugate
+        # quat_D = Quaternion(quat_d)
 
-        err = quat_C*quat_D
-        rot_err = np.atleast_2d(err.elements[1:]).T
-        error_pose = np.atleast_2d(np.concatenate((error_position, rot_err)))
+        # err = quat_C*quat_D
+        # rot_err = np.atleast_2d(err.elements[1:]).T
+        # error_pose = np.atleast_2d(np.concatenate((error_position, rot_err)))
         
-        # Velocity error
-        velocity_desired = np.atleast_2d(velocity_desired).T
-        error_velocity = jacobian * current_joint_velocity - velocity_desired
-
+        # # Velocity error
+        # velocity_desired = np.atleast_2d(velocity_desired).T
+        # error_velocity = jacobian * current_joint_velocity - velocity_desired
+        error_pose = np.array([0,0,0,0,0,0])
+        error_velocity = np.array([0,0,0,0,0,0])
         return error_pose, error_velocity
 
     def calc_error_joint(self, current, desired):
@@ -351,10 +358,10 @@ class controller():
     def set_cartesian_pose(self, pose):
         """
         Set cartesian pose.
-        Parameters: pose (6x1)
+        Parameters: pose (7x1 - x,y,z,w,qx,qy,qz)
         Return: None
         """
-        list_tmp = [0,0,0,0,0,0]
+        list_tmp = [0,0,0,0,0,0,0]
         pose_list = np.ndarray.tolist(pose)
         for index, value in enumerate(pose_list):
             list_tmp[index] = pose_list[index][0]
@@ -450,12 +457,13 @@ class controller():
         rospy.loginfo("[Control_node]: If false, too turn on control set rosparam to true.")
         r = rospy.Rate(self.rate)
         while not rospy.is_shutdown():
+            start_time = rospy.get_time()
             #self.pr.enable()
 
 
             ### UPDATE current robot state ###
             periodTime = self.get_periodTime()
-            self.robot_dyn_kin.update_robot_states(periodTime)
+            # self.robot_dyn_kin.update_robot_states(periodTime)
             controller_flag = self.settings.get_control_flag()
             move2neutral = self.settings.get_move2neutral()
 
@@ -470,13 +478,13 @@ class controller():
             if controller_flag == False:              
                 self.set_initalstate(self.robot_dyn_kin.get_current_joint_angles_list())
                 self.set_cartesian_pose(self.robot_dyn_kin.get_current_cartesian_pose())
-                self.robot_dyn_kin.set_limb_timeout(self.rate, 0)
+                # self.robot_dyn_kin.set_limb_timeout(self.rate, 0)
                 self.safety_regulator.reset_watchdig_oscillation()
 
             if controller_flag == True:
 
                 ### GET current robot state #
-                self.robot_dyn_kin.set_limb_timeout(self.rate, 1)
+                # self.robot_dyn_kin.set_limb_timeout(self.rate, 1)
                 cur_joint_angle = self.robot_dyn_kin.get_current_joint_angles()         # numpy 7x1
                 cur_joint_velocity = self.robot_dyn_kin.get_current_joint_velocities()  # numpy 7x1
                 mass = self.robot_dyn_kin.get_mass()    # numpy 7x7 
@@ -494,9 +502,9 @@ class controller():
                 joint_velocity_error = self.calc_error_joint(cur_joint_velocity, joint_velocity_desi)
                 pose_desired = self.get_cartesian_pose_desired().T
 
-                cartesian_pose = self.robot_dyn_kin.
-                cartesian_velocity =
-                self.publish_jointstate()
+                cartesian_pose = self.robot_dyn_kin.get_current_cartesian_pose()
+                cartesian_velocity = self.robot_dyn_kin.get_current_cartesian_velocity()
+                self.publish_jointstate(cartesian_pose, cartesian_velocity, self._pub_cartesian_state)
                 cartesian_pose_error, cartesian_velocity_error = self.calc_error_cart(pose_desired, self.robot_dyn_kin.get_jacobian(), self.robot_dyn_kin.get_current_joint_velocities())
                 cartesian_acceleration = self.robot_dyn_kin.get_cartesian_acceleration_EE()
                 
@@ -535,8 +543,11 @@ class controller():
 
                 #self.pr.disable()
                 #self.pr.print_stats(sort='time')  
-            
+
             r.sleep()
+            endtime = rospy.get_time()
+            self.publish_runtime(endtime-start_time, self._pub_runtime)
+
         self.clean_shutdown()
    
   

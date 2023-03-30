@@ -22,7 +22,7 @@ oscillation_guard: {
 stiffness_manager: {
   critical_velocity: 0.2,
   critical_angle: 5,
-  calculation_method: pose,
+  calculation_method: ramp,
 }
 
 mediapipe: {

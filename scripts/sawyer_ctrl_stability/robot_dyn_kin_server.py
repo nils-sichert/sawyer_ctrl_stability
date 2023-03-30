@@ -68,7 +68,7 @@ class Robot_dynamic_kinematic_server():
         self.periodTime = 0.01
 
         # set control timeout
-        self.set_limb_timeout(rate,missed_cmd)
+        # self.set_limb_timeout(rate,missed_cmd)
         
 
         
@@ -107,7 +107,7 @@ class Robot_dynamic_kinematic_server():
                             [M[2,0], M[2,1], M[2,2], p.z()],
                             [0,0,0,1]])
 
-            return transformation_mat, p, M
+            return transformation_mat
                             
         else:
             return None
@@ -365,15 +365,25 @@ class Robot_dynamic_kinematic_server():
         """
         tf_mat = self.calc_pose_cartesianSpace('positions')
         position_cart = np.atleast_2d([tf_mat[0,3], tf_mat[1,3], tf_mat[2,3]]).T
-        euler_cart = np.atleast_2d(tft.euler_from_matrix(tf_mat)).T
-        pose = np.concatenate((position_cart, euler_cart), axis = 0)
+        quat_cart = np.atleast_2d(tft.quaternion_from_matrix(tf_mat)).T
+        pose = np.concatenate((position_cart, quat_cart), axis = 0)
+        return pose
+    
+    def get_current_cartesian_velocity(self):
+        """
+        TODO redundance
+        """
+        tf_mat = self.calc_pose_cartesianSpace('velocities')
+        position_cart = np.atleast_2d([tf_mat[0,3], tf_mat[1,3], tf_mat[2,3]]).T
+        quat_cart = np.atleast_2d(tft.quaternion_from_matrix(tf_mat)).T
+        pose = np.concatenate((position_cart, quat_cart), axis = 0)
         return pose
     
     ############ Update methods ############
 
     def update_periodTime(self, periodTime):
         """
-        Update time of since last update.
+        Update time of since last update
         Parameters: time since last period (sec - float)
         Return: None
         """

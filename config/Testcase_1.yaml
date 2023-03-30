@@ -1,7 +1,7 @@
 control_node: {
   control_is_on: false,
   joint_angle_desired: [-0.9313330078125, -0.078181640625, 1.6050537109375, 1.4618544921875, 0.1818583984375, 1.4244921875, 0.3981796875],
-  cartesian_pose_desired: [0,0,0,0,0,0],
+  cartesian_pose_desired: [0,0,0,0,0,0,0],
   joint_velocity_desired: [0,0,0,0,0,0,0],
   selected_filter_number: 3,
   Kd_upper_limit: [100,100,100,60,40,20,20],

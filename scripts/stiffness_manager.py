@@ -16,8 +16,8 @@ class Stiffness_mangager():
         self.D_d_upper_limit = rospy.get_param("control_node/Dd_upper_limit")
         self.K_d_lower_limit = rospy.get_param("control_node/Kd_lower_limit")
         self.D_d_lower_limit = rospy.get_param("control_node/Dd_lower_limit")
-        self.critical_velocity = rospy.get_param("stiffness_manager/critical_velocity", 0.2)
-        self.stiffness_calculation_method = rospy.get_param("stiffness_manager/calculation_method", "pose")
+        self.critical_velocity = rospy.get_param("stiffness_manager/critical_velocity", default=0.2)
+        self.stiffness_calculation_method = rospy.get_param("stiffness_manager/calculation_method", default="pose")
 
         self._pub_Kd = rospy.Publisher('/control_node/Kd_Dd', JointState, queue_size=20)
 
@@ -26,7 +26,12 @@ class Stiffness_mangager():
         self.rate = 200 # updaterate
         self._angle = 0
         self._joint_velocity = np.zeros((7,1))
-        self.counter = 0 #sec
+        self.counter = 0 # sec
+        self.ratio = 0.7 # 0.7 = 70% of max. Kd and Dd
+        self.timeout_stiff_joint = 2.0 # Time joint stays stiff bevor releasing stifness
+        self.timeout = [0,0,0,0,0,0,0]
+        self.velo_prev = [0,0,0,0,0,0,0]
+        
 
     def publish_jointstate(self, position, velocity, publisher: rospy.Publisher):
         """
@@ -55,13 +60,16 @@ class Stiffness_mangager():
         while not rospy.is_shutdown():
             self.update_limits()
             if self.stiffness_calculation_method == "pose":
+                self.counter = 0
                 K_d, D_d = self.calculate_cv_stiffness()    
             elif self.stiffness_calculation_method == "velocity":
+                self.counter = 0
                 K_d, D_d = self.calculate_velocity_stiffness()
             elif self.stiffness_calculation_method == "ramp":
                 K_d, D_d = self.calculate_increasing_stiffness()
             else:
                 rospy.logerr_once("[Stiffness manager]: Wrong calculation method choosen (methods: pose/ velocity)")
+                self.counter = 0
                 K_d = self.K_d_upper_limit
                 D_d = self.D_d_upper_limit
             self.publish_jointstate(K_d, D_d, self._pub_Kd)
@@ -90,8 +98,8 @@ class Stiffness_mangager():
         offset = self.offset_angle # degrees
         critical_angle = self.critical_angle #degrees        
 
-        delta_Kd = np.array(self.K_d_upper_limit)-np.array(self.K_d_lower_limit)
-        delta_Dd = np.array(self.D_d_upper_limit)-np.array(self.D_d_lower_limit)
+        delta_Kd = (np.array(self.K_d_upper_limit)-np.array(self.K_d_lower_limit))*self.ratio
+        delta_Dd = (np.array(self.D_d_upper_limit)-np.array(self.D_d_lower_limit))*self.ratio
 
         if angle <= offset:
             Kd = self.K_d_lower_limit
@@ -109,30 +117,49 @@ class Stiffness_mangager():
     def calculate_velocity_stiffness(self):
         #TODO add counter thats delays release
         velocities = self._joint_velocity
-        delta_Kd = np.array(self.K_d_upper_limit)-np.array(self.K_d_lower_limit)
-        delta_Dd = np.array(self.D_d_upper_limit)-np.array(self.D_d_lower_limit)
+        delta_Kd = (np.array(self.K_d_upper_limit)-np.array(self.K_d_lower_limit))*self.ratio
+        delta_Dd = (np.array(self.D_d_upper_limit)-np.array(self.D_d_lower_limit))*self.ratio
         Kd = np.zeros(len(velocities))
         Dd = np.zeros(len(velocities))
         for index, value in enumerate(velocities):
             abs_velo = np.abs(value)
-            if abs_velo <= self.critical_velocity:
+
+            if self.timeout[index] < 0:
+                self.timeout[index] = 0
+            else: self.timeout[index] -= 1/self.rate
+
+            if abs_velo <= self.critical_velocity and self.timeout[index]<=0:
                 Kd[index] = self.K_d_lower_limit[index]
                 Dd[index] = self.D_d_lower_limit[index]
+                self.velo_prev[index] = abs_velo
+
             else:
-                Kd[index] = ((abs_velo-self.critical_velocity))*delta_Kd[index]+self.K_d_lower_limit[index]
-                Dd[index] = ((abs_velo-self.critical_velocity))*delta_Dd[index]+self.D_d_lower_limit[index]
+                if abs_velo<=self.velo_prev[index]:
+                    Kd[index] = ((self.velo_prev[index]-self.critical_velocity))*delta_Kd[index]+self.K_d_lower_limit[index]
+                    Dd[index] = ((self.velo_prev[index]-self.critical_velocity))*delta_Dd[index]+self.D_d_lower_limit[index]
+                
+                else:
+                    Kd[index] = ((abs_velo-self.critical_velocity))*delta_Kd[index]+self.K_d_lower_limit[index]
+                    Dd[index] = ((abs_velo-self.critical_velocity))*delta_Dd[index]+self.D_d_lower_limit[index]   
+                    self.timeout[index] = self.timeout_stiff_joint
+                    self.velo_prev[index] = abs_velo              
+
+                if abs_velo > self.velo_prev[index]:
+                    pass
 
                 if Kd[index] > self.K_d_upper_limit[index]:
                     Kd[index] = self.K_d_upper_limit[index]
                     Dd[index] = self.D_d_upper_limit[index]
+
         return Kd, Dd
 
     def calculate_increasing_stiffness(self):
         # Debug and oscillation guard test function. DO NOT use for a real stiffness calculation
         delta_Kd = np.array(self.K_d_upper_limit)-np.array(self.K_d_lower_limit)
         delta_Dd = np.array(self.D_d_upper_limit)-np.array(self.D_d_lower_limit)
-        Kd = self.K_d_lower_limit + self.counter * delta_Kd/(self.rate*3)
-        Dd = self.D_d_lower_limit + self.counter * delta_Dd/(self.rate*3)
+        Kd = self.K_d_lower_limit + self.counter * delta_Kd/(self.rate*6)
+        Dd = self.D_d_lower_limit + self.counter * delta_Dd/(self.rate*6)
+        self.counter += 1
         return Kd, Dd
 
 

@@ -4,7 +4,7 @@
   <rosparam file="$(find sawyer_ctrl_stability)/config/Testcase_1.yaml" />
   
   <node pkg="sawyer_ctrl_stability" type="control_node.py" name="control_node" />
-  <node pkg="sawyer_ctrl_stability" type="stiffness_manager.py" name="stiffness_manager" />
+  <!--node pkg="sawyer_ctrl_stability" type="stiffness_manager.py" name="stiffness_manager" /-->
   <node pkg="sawyer_ctrl_stability" type="trajectory_executor.py" name="trajectory_publisher" />
   <node pkg="sawyer_ctrl_stability" type="head_light_manager.py" name="headlight" />
   <node pkg="sawyer_ctrl_stability" type="camera_pose_detection.py" name="camera_pose_detection"/>
@@ -15,3 +15,4 @@
   </include>
 
 </launch>
+  

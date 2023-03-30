@@ -1,29 +1,29 @@
 control_node: {
-  control_is_on: false,
+  control_is_on: true,
   joint_angle_desired: [-0.9313330078125, -0.078181640625, 1.6050537109375, 1.4618544921875, 0.1818583984375, 1.4244921875, 0.3981796875],
   cartesian_pose_desired: [0,0,0,0,0,0,0],
   joint_velocity_desired: [0,0,0,0,0,0,0],
   selected_filter_number: 3,
-  Kd_upper_limit: [100,100,100,60,40,20,20],
+  Kd_upper_limit: [230,230,230,150,100,40,40],
   Kd_lower_limit: [10,10,10,7,5,5,5,],
   Dd_upper_limit: [1,1,1,1,1,1,1],
   Dd_lower_limit: [1,1,1,1,1,1,1],
   Lowpass_coeff: 0.6,
-  move2neutral: false,
+  move2neutral: true,
   suppress_self_collision_detection: false,
   suppress_contact_collision_detection: false,
 }
 
 oscillation_guard: {
   window_length: 50,
-  corner_frequency: 20,
-  magnitude_limit: 10,
+  corner_frequency: 2,
+  magnitude_limit: 6,
 }
 stiffness_manager: {
-  critical_velocity: 1,
+  critical_velocity: 0.2,
   offset_angle: 5,
   critical_angle: 15,
-  calculation_method: pose,
+  calculation_method: velocity,
 }
 
 mediapipe: {
@@ -41,5 +41,5 @@ named_poses: {
   }
 }
 trajectory_executor: {
-  method: path,
+  method: steady,
 }

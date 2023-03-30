@@ -14,7 +14,7 @@ class trajectoy_executer():
     def __init__(self) -> None:
         rospy.init_node("trajectory_publisher")
         
-        self._pub_joint_angle_desi = rospy.Publisher("/control_node/joint_states_desi", JointState, queue_size=10)
+        self._pub_joint_angle_desi = rospy.Publisher("/control_node/joint_states_desi", JointState, queue_size=1)
         self.rate = 400 #Hz
         self.counter = 0
         self.joint_angle = []

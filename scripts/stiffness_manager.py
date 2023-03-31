@@ -67,6 +67,10 @@ class Stiffness_mangager():
                 K_d, D_d = self.calculate_velocity_stiffness()
             elif self.stiffness_calculation_method == "ramp":
                 K_d, D_d = self.calculate_increasing_stiffness()
+
+            elif self.stiffness_calculation_method == "combined":
+                self.counter = 0
+                K_d, D_d = self.combine_stiffness(self.calculate_cv_stiffness(),self.calculate_velocity_stiffness())
             else:
                 rospy.logerr_once("[Stiffness manager]: Wrong calculation method choosen (methods: pose/ velocity)")
                 self.counter = 0
@@ -115,7 +119,6 @@ class Stiffness_mangager():
         return Kd, Dd
     
     def calculate_velocity_stiffness(self):
-        #TODO add counter thats delays release
         velocities = self._joint_velocity
         delta_Kd = (np.array(self.K_d_upper_limit)-np.array(self.K_d_lower_limit))*self.ratio
         delta_Dd = (np.array(self.D_d_upper_limit)-np.array(self.D_d_lower_limit))*self.ratio
@@ -162,6 +165,14 @@ class Stiffness_mangager():
         self.counter += 1
         return Kd, Dd
 
+    def combine_stiffness(self, Kd_cv, Dd_cv, Kd_velocity, Dd_velocity):
+        Kd = max(Kd_cv, Kd_velocity)
+        Dd = max(Dd_cv, Dd_velocity)
+
+        if Kd > self.K_d_upper_limit:
+            Kd = self.K_d_upper_limit
+            Dd= self.D_d_upper_limit
+        return Kd, Dd
 
 if __name__ == "__main__":
     mng = Stiffness_mangager()

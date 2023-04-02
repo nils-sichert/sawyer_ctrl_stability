@@ -4,6 +4,7 @@
 import rospy
 from std_msgs.msg import Float32, Bool
 from sensor_msgs.msg import Image
+from geometry_msgs.msg import PointStamped
 import mediapipe as mp
 import cv2
 import cv2.aruco as aruco
@@ -29,8 +30,9 @@ class tracker:
         self.pr = cProfile.Profile()
         rospy.init_node('body_tracker')
         self.rate = 100 # desired 100 hz actual time per loop 0.13 second
-        self.pub_angle = rospy.Publisher('/mediapipe/angle', Float32, queue_size=1)
-        self.pub_img = rospy.Publisher('/mediapipe/processed_img', Image, queue_size=1)
+        self._pub_angle = rospy.Publisher('/mediapipe/angle', PointStamped, queue_size=1)
+        self._pub_runtime = rospy.Publisher('/mediapipe/runtime', PointStamped, queue_size=1)
+        #self.pub_img = rospy.Publisher('/mediapipe/processed_img', Image, queue_size=1)
         
         self.sub = rospy.Subscriber('/start', Bool, callback=self.callback)
         self.processing_sub = rospy.Subscriber('/usb_cam/image_raw', Image, callback=self.process_img)
@@ -52,6 +54,18 @@ class tracker:
     def callback(self, msg):
         self.start = msg.data
     
+    def publish_angle(self,angle, publisher: rospy.Publisher):
+        msg = PointStamped()
+        msg.header.stamp = rospy.Time.now()
+        msg.point.x = angle
+        publisher.publish(msg)
+
+    def publish_runtime(self, float_, publisher: rospy.Publisher):
+        msg = PointStamped()
+        msg.header.stamp = rospy.Time.now()
+        msg.point.x = float_
+        publisher.publish(msg)
+
     def process_img (self, image, critical_angle): 
         cv2.setUseOptimized(True)
         original_img = image
@@ -144,12 +158,13 @@ class tracker:
                     Center = (w-Center[0], Center[1])        
                     cv2.putText(image, ('%d px' % dist[0]), (Center[0], Center[1] - 20), cv2.FONT_HERSHEY_SIMPLEX, .5, (0, 255, 255), 2,
                                 cv2.LINE_AA)
-        self.pub_angle.publish(angle)
+        self.publish_angle(angle,self._pub_angle)
         return image
 
     def run(self):
         r = rospy.Rate(self.rate)
         while not rospy.is_shutdown():
+            start_time = rospy.get_time()
             start = rospy.get_param("/mediapipe/start", True)
             if start == True:
                 critical_angle = rospy.get_param("/stiffness_manager/offset_angle", default=10) #limit to instability in degree
@@ -159,6 +174,9 @@ class tracker:
                 image = self.process_img(frame, critical_angle)
                 cv2.imshow("pose",image)
                 cv2.waitKey(1)
+            endtime = rospy.get_time()
+            runtime = endtime - start_time
+            self.publish_runtime(runtime, self._pub_runtime)
             r.sleep()
 
 

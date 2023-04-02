@@ -91,7 +91,7 @@ class Safety_regulator():
                 signal = self.oscillation_window[j,:]
                 power_tmp = np.abs(np.fft.rfft(signal))
                 length_power = len(power_tmp)
-                frequency_tmp = np.linspace(0, rate/2, length_power)
+                frequency_tmp = np.linspace(1, rate/2, length_power)
                 power[j] = power_tmp
                 frequency[j] = frequency_tmp
                 

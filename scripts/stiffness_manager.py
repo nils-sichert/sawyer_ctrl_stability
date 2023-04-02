@@ -2,7 +2,7 @@
 
 import rospy
 from sensor_msgs.msg import JointState
-from std_msgs.msg import Float32
+from geometry_msgs.msg import PointStamped
 import numpy as np
 import math
 
@@ -21,7 +21,7 @@ class Stiffness_mangager():
 
         self._pub_Kd = rospy.Publisher('/control_node/Kd_Dd', JointState, queue_size=20)
 
-        self._sub_media_pipe = rospy.Subscriber('/mediapipe/angle', Float32, self.callback_mediapipe_angle)
+        self._sub_media_pipe = rospy.Subscriber('/mediapipe/angle', PointStamped, self.callback_mediapipe_angle)
         self._sub_joint_velocity = rospy.Subscriber('/robot/joint_states',JointState, self.callback_joint_velocity)
         self.rate = 200 # updaterate
         self._angle = 0
@@ -40,12 +40,14 @@ class Stiffness_mangager():
         Return: sensor_msg
         """
         msg = JointState()
+        msg.header.stamp = rospy.Time.now()
         msg.position = position # Kd
         msg.velocity = velocity # Dd
         publisher.publish(msg)
 
     def callback_mediapipe_angle(self, data):
-        self._angle = data.data
+        tmp = data.point
+        self._angle = tmp.x
 
     def callback_joint_velocity(self, data):
         self._joint_velocity = np.array(data.velocity[1:8])

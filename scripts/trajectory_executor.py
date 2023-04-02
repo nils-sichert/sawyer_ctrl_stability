@@ -31,12 +31,15 @@ class trajectoy_executer():
             reader = csv.reader(f,delimiter=',')
             for row in reader:
                 self.cartesian_coordinates.append(row)
+        
+        self.numberOfCommands = len(self.joint_angle)
 
     def publish_jointstates(self, position, velocity, publisher: rospy.Publisher):
         """
         Publisher of desired joint angles and desired joint velocities
         """
         msg = JointState()
+        msg.header.stamp = rospy.Time.now()
         msg.position = position
         msg.velocity = velocity
         publisher.publish(msg)
@@ -49,18 +52,14 @@ class trajectoy_executer():
         velocity = rospy.get_param("control_node/joint_velocity_desired")
         return position, velocity
             
-    def publish_traj(self):
-        r = rospy.Rate(self.rate)
-        for j, c in zip(self.joint_angle, self.cartesian_coordinates):
-            joint_position = [float(x) for x in j]
-            joint_velocity = [0,0,0,0,0,0,0]
-
-            cartesian_pose = [float(x) for x in c]
-            cartesian_velocity = [0,0,0,0,0,0,0]
-
-            self.publish_jointstates(joint_position, joint_velocity, self._pub_joint_angle_desi)
-            self.publish_jointstates(cartesian_pose, cartesian_velocity, self._pub_cartesian_pose)
-            r.sleep()
+    def get_traj(self):
+        if self.counter >= self.numberOfCommands:
+            self.counter = 0
+        
+        cart = [float(x) for x in (self.cartesian_coordinates[self.counter])]
+        joint = [float(x) for x in (self.joint_angle[self.counter])]
+        self.counter += 1
+        return cart, joint
 
 
     def publish(self):
@@ -73,11 +72,15 @@ class trajectoy_executer():
             trajectory_method = rospy.get_param("trajectory_executor/method")
             if trajectory_method == "path":
                 #path = rospy.get_param("trajectory_executer/path")
-                rospy.logwarn("[Traj. executer]: Executing path")
-                self.publish_traj()
+                rospy.logwarn_once("[{}]: Executing path".format(rospy.get_name()))
+                cart, joint = self.get_traj()
+                velocity = [0,0,0,0,0,0,0]
+                self.publish_jointstates(cart, velocity, self._pub_cartesian_pose)
+                self.publish_jointstates(joint, velocity, self._pub_joint_angle_desi)
 
             else:
                 position, velocity = self.get_joint_state_desired()
+                rospy.logwarn_once("[{}]: Holding position (to execute path change to: path)".format(rospy.get_name()))
                 self.publish_jointstates(position, velocity, self._pub_joint_angle_desi)
             r.sleep()
     

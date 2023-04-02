@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import rospy
-from std_msgs.msg import String
+from sensor_msgs.msg import TimeReference
 from intera_interface import Lights
 
 class Head_light_manager():
@@ -22,7 +22,7 @@ class Head_light_manager():
         self.light.set_light_state('head_blue_light', False)
 
         # Subscribe headlight color setting
-        self._sub_headlightColor = rospy.Subscriber('/control_node_debug/color', String, self.callback_color)
+        self._sub_headlightColor = rospy.Subscriber('/control_node_debug/color', TimeReference , self.callback_color)
         
         # Init variables
         self.color = 'red'
@@ -35,10 +35,10 @@ class Head_light_manager():
         Parameters: desired color (data.data: Str)
         Return: new desired color (Str)
         """
-        if data.data != self.color:
+        if data.source != self.color:
             self.flag = True
             self.color_prev = self.color
-        self.color = data.data
+        self.color = data.source
         
     
     def set_color(self):

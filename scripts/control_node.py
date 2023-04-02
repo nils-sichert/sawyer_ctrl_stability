@@ -4,8 +4,8 @@
 import rospy
 from pyquaternion import Quaternion
 import numpy as np
-from sensor_msgs.msg import JointState, PointCloud
-from geometry_msgs.msg import Point32
+from sensor_msgs.msg import JointState, TimeReference
+from geometry_msgs.msg import PointStamped
 from std_msgs.msg import Empty, Header, String, Float64
 from intera_core_msgs.msg import JointLimits, SEAJointState
 import tf.transformations as tft
@@ -104,9 +104,9 @@ class controller():
         self._pub_joint_torques = rospy.Publisher('control_node_debug/setpoints_motor_torque', JointState, queue_size=1)
         
         self._pub_cartesian_state = rospy.Publisher('control_node_debug/cartesian_EE_state', JointState, queue_size=5)
-        self._pub_runtime = rospy.Publisher('control_node_debug/runtime', Float64, queue_size = 5)
+        self._pub_runtime = rospy.Publisher('control_node_debug/runtime', PointStamped, queue_size = 5)
         # Publisher of colors for headlight (setpoint torque: green < 75%, yellow >= 75% <95%, red >=95% of torque limit)        
-        self._pub_lightcolor = rospy.Publisher('control_node_debug/color', String, queue_size=1)
+        self._pub_lightcolor = rospy.Publisher('control_node_debug/color', TimeReference, queue_size=1)
 
         # Publisher: FFT of joint velocity, publish frequency and magnitude
         self._pub_oscillation = [None]*7 
@@ -139,23 +139,28 @@ class controller():
     ############ Publisher & Callbacks (Debug purpose) ############ 
     def publish_jointstate(self, position, velocity, publisher: rospy.Publisher):
         msg = JointState()
+        msg.header.stamp = rospy.Time.now()
         msg.position = position
         msg.velocity = velocity
         publisher.publish(msg)
 
     def publish_effortstate(self, effort, publisher: rospy.Publisher):
         msg = JointState()
+
+        msg.header.stamp = rospy.Time.now()
         msg.effort = effort
         publisher.publish(msg)
 
     def publish_head_light_color(self, string, publisher: rospy.Publisher):
-        msg = String()
-        msg.data = string
+        msg = TimeReference()
+        msg.header.stamp = rospy.Time.now()
+        msg.source = string
         publisher.publish(msg)
     
     def publish_runtime(self, float_, publisher: rospy.Publisher):
-        msg = Float64()
-        msg.data = float_
+        msg = PointStamped()
+        msg.header.stamp = rospy.Time.now()
+        msg.point.x = float_
         publisher.publish(msg)
 
     def callback_Kd_Dd(self, data):

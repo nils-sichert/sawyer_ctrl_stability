@@ -16,18 +16,19 @@ class trajectoy_executer():
         
         self._pub_joint_angle_desi = rospy.Publisher("/control_node/joint_states_desi", JointState, queue_size=1)
         self._pub_cartesian_pose = rospy.Publisher('/control_node/cartesian_pose_desi', JointState, queue_size=1)
+        filename = rospy.get_param('/trajectory_executor/filename')
         self.rate = 400 #Hz
         self.counter = 0
         self.joint_angle = []
         self.cartesian_coordinates = []
         tmp = os.path.dirname(__file__)
         
-        with open(os.path.join(tmp, 'sawyer_ctrl_stability/trajectory/square_traj_joint.csv')) as f:
+        with open(os.path.join(tmp, os.path.join('sawyer_ctrl_stability/trajectory/jointspace/',filename ))) as f:
             reader = csv.reader(f,delimiter=',')
             for row in reader:
                 self.joint_angle.append(row)
         
-        with open(os.path.join(tmp, 'sawyer_ctrl_stability/trajectory/square_traj_cart.csv')) as f:
+        with open(os.path.join(tmp, os.path.join('sawyer_ctrl_stability/trajectory/cartesianspace/',filename ))) as f:
             reader = csv.reader(f,delimiter=',')
             for row in reader:
                 self.cartesian_coordinates.append(row)
@@ -70,6 +71,7 @@ class trajectoy_executer():
         
         while not rospy.is_shutdown():
             trajectory_method = rospy.get_param("trajectory_executor/method")
+            
             if trajectory_method == "path":
                 #path = rospy.get_param("trajectory_executer/path")
                 rospy.logwarn_once("[{}]: Executing path".format(rospy.get_name()))

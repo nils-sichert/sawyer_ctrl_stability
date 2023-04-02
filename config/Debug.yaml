@@ -42,4 +42,5 @@ named_poses: {
 }
 trajectory_executor: {
   method: steady,
+  filename: square_traj.csv,
 }

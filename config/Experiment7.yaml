@@ -1,0 +1,46 @@
+control_node: {
+  control_is_on: false,
+  joint_angle_desired: [0.7106812054818626,0.3949970840878347,-1.2467968471914113,1.0824772481070768,-1.3439306657619443,-1.1151723015794024,1.2553241850475012],
+  cartesian_pose_desired: [0,0,0,0,0,0,0],
+  joint_velocity_desired: [0,0,0,0,0,0,0],
+  selected_filter_number: 4,
+  Kd_upper_limit: [120,120,120,80,55,25,25],
+  Kd_lower_limit: [120,120,120,80,55,25,25],
+  Dd_upper_limit: [1,1,1,1,1,1,1],
+  Dd_lower_limit: [1,1,1,1,1,1,1],
+  Lowpass_coeff: 0.6,
+  move2neutral: true,
+  suppress_self_collision_detection: false,
+  suppress_contact_collision_detection: false,
+}
+
+oscillation_guard: {
+  window_length: 50,
+  corner_frequency: 2,
+  magnitude_limit: 6,
+}
+stiffness_manager: {
+  critical_velocity: 0.2,
+  offset_angle: 5,
+  critical_angle: 15,
+  calculation_method: velocity,
+}
+
+mediapipe: {
+  start: true,
+}
+nullspace: {
+  is_locked: false,
+  jointspace_pose: [0.7106812054818626,0.3949970840878347,-1.2467968471914113,1.0824772481070768,-1.3439306657619443,-1.1151723015794024,1.2553241850475012],
+}
+named_poses: {
+  right: {
+    poses: {
+      neutral: [0.7106812054818626,0.3949970840878347,-1.2467968471914113,1.0824772481070768,-1.3439306657619443,-1.1151723015794024,1.2553241850475012],
+    }
+  }
+}
+trajectory_executor: {
+  method: steady,
+  filename: square_traj.csv,
+}

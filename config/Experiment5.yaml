@@ -16,8 +16,8 @@ control_node: {
 
 oscillation_guard: {
   window_length: 50,
-  corner_frequency: 2,
-  magnitude_limit: 6,
+  corner_frequency: 10,
+  magnitude_limit: 20,
 }
 stiffness_manager: {
   critical_velocity: 0.2,

@@ -1,11 +1,11 @@
 control_node: {
-  control_is_on: false,
+  control_is_on: true,
   joint_angle_desired: [0.7106812054818626,0.3949970840878347,-1.2467968471914113,1.0824772481070768,-1.3439306657619443,-1.1151723015794024,1.2553241850475012],
   cartesian_pose_desired: [0,0,0,0,0,0,0],
   joint_velocity_desired: [0,0,0,0,0,0,0],
   selected_filter_number: 4,
-  Kd_upper_limit: [10,10,10,7,5,5,5],
-  Kd_lower_limit: [10,10,10,7,5,5,5],
+  Kd_upper_limit: [65,65,65,45,25,15,15],
+  Kd_lower_limit: [65,65,65,45,25,15,15],
   Dd_upper_limit: [1,1,1,1,1,1,1],
   Dd_lower_limit: [1,1,1,1,1,1,1],
   Lowpass_coeff: 0.6,
@@ -15,9 +15,9 @@ control_node: {
 }
 
 oscillation_guard: {
-  window_length: 50,
+  window_length: 100,
   corner_frequency: 2,
-  magnitude_limit: 6,
+  magnitude_limit: 10,
 }
 stiffness_manager: {
   critical_velocity: 0.2,
@@ -41,6 +41,6 @@ named_poses: {
   }
 }
 trajectory_executor: {
-  method: steady,
+  method: path,
   filename: square_traj.csv,
 }

@@ -20,7 +20,7 @@ oscillation_guard: {
   magnitude_limit: 6,
 }
 stiffness_manager: {
-  critical_velocity: 0.2,
+  critical_velocity: 2,
   offset_angle: 5,
   critical_angle: 15,
   calculation_method: velocity,

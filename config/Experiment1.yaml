@@ -1,5 +1,5 @@
 control_node: {
-  control_is_on: false,
+  control_is_on: true,
   joint_angle_desired: [0.7106812054818626,0.3949970840878347,-1.2467968471914113,1.0824772481070768,-1.3439306657619443,-1.1151723015794024,1.2553241850475012],
   cartesian_pose_desired: [0,0,0,0,0,0,0],
   joint_velocity_desired: [0,0,0,0,0,0,0],

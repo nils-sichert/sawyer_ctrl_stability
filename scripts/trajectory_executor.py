@@ -17,7 +17,7 @@ class trajectoy_executer():
         self._pub_joint_angle_desi = rospy.Publisher("/control_node/joint_states_desi", JointState, queue_size=1)
         self._pub_cartesian_pose = rospy.Publisher('/control_node/cartesian_pose_desi', JointState, queue_size=1)
         filename = rospy.get_param('/trajectory_executor/filename')
-        self.rate = 400 #Hz
+        self.rate = 100 #Hz
         self.counter = 0
         self.joint_angle = []
         self.cartesian_coordinates = []
@@ -49,9 +49,13 @@ class trajectoy_executer():
         """
         Getter of desired joint anlges and desired joint velocities
         """  
-        position = rospy.get_param("control_node/joint_angle_desired")
-        velocity = rospy.get_param("control_node/joint_velocity_desired")
-        return position, velocity
+        position_joint = rospy.get_param("control_node/joint_angle_desired")
+        velocity_joint = rospy.get_param("control_node/joint_velocity_desired")
+        position_cart = rospy.get_param("control_node/cartesian_pose_desired")
+        velocity_cart = rospy.get_param("control_node/joint_velocity_desired")
+
+
+        return position_joint, velocity_joint, position_cart, velocity_cart
             
     def get_traj(self):
         if self.counter >= self.numberOfCommands:
@@ -81,9 +85,11 @@ class trajectoy_executer():
                 self.publish_jointstates(joint, velocity, self._pub_joint_angle_desi)
 
             else:
-                position, velocity = self.get_joint_state_desired()
+                self.counter = 0
+                position_joint, velocity_joint, position_cart, velocity_cart = self.get_joint_state_desired()
                 rospy.logwarn_once("[{}]: Holding position (to execute path change to: path)".format(rospy.get_name()))
-                self.publish_jointstates(position, velocity, self._pub_joint_angle_desi)
+                self.publish_jointstates(position_joint, velocity_joint, self._pub_joint_angle_desi)
+                self.publish_jointstates(position_cart, velocity_cart, self._pub_cartesian_pose)
             r.sleep()
     
 if __name__ =="__main__":

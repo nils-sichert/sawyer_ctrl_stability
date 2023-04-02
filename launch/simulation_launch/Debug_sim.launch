@@ -7,7 +7,7 @@
   </include>
 
   <!-- Load configuration-->
-  <rosparam file="$(find sawyer_ctrl_stability)/config/Testcase_1.yaml" command="load"/>
+  <rosparam file="$(find sawyer_ctrl_stability)/config/Debug.yaml" command="load"/>
   
   <node pkg="sawyer_ctrl_stability" type="control_node.py" name="control_node" />
   <node pkg="sawyer_ctrl_stability" type="stiffness_manager.py" name="stiffness_manager" />

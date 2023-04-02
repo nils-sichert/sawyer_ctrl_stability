@@ -40,7 +40,7 @@ def ik_service_client(position, orientation, limb = "right", use_advanced_option
 
     if (use_advanced_options):
         # Optional Advanced IK parameters
-        rospy.loginfo("Running Advanced IK Service Client example.")
+        rospy.loginfo("Running Advanced IK Service Client.")
         # The joint seed is where the IK position solver starts its optimization
         ikreq.seed_mode = ikreq.SEED_USER
         seed = JointState()

@@ -214,3 +214,8 @@ Regulates the joint angle/torque limit and guards the oscillation.
 
 ### Trajectory executer
 Executes either a trajectory from a file or publishes a desired pose from the ros param server.
+
+## Record RosBag of Thesis parameters
+```sh
+rosbag record --duration=25 /control_node/Kd_Dd /control_node/joint_states_desi /control_node/cartesian_pose_desi /robot/joint_states /control_node_debug/joint_velocity /control_node_debug/setpoints_motor_torque /control_node_debug/cartesian_EE_state /control_node_debug/runtime /control_node_debug/color /control_node_debug/oscillation_joint/0 /control_node_debug/oscillation_joint/1 /control_node_debug/oscillation_joint/2 /control_node_debug/oscillation_joint/3 /control_node_debug/oscillation_joint/4 /control_node_debug/oscillation_joint/5 /control_node_debug/oscillation_joint/6 /mediapipe/angle /mediapipe/runtime
+```

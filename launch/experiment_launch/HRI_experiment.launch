@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <launch>
   <!-- Load configuration-->
-  <rosparam file="$(find sawyer_ctrl_stability)/config/Experiment1.yaml" />
+  <rosparam file="$(find sawyer_ctrl_stability)/config/HRI_Experiment.yaml" />
   
   <node pkg="sawyer_ctrl_stability" type="control_node.py" name="control_node" />
   <node pkg="sawyer_ctrl_stability" type="stiffness_manager.py" name="stiffness_manager" />
@@ -12,7 +12,7 @@
 
 
   <include file="$(find sawyer_ctrl_stability)/launch/specific_launch/debug_Plots.launch">
-  </include-->
+  </include>
 
 </launch>
   

@@ -23,12 +23,12 @@ class Stiffness_mangager():
 
         self._sub_media_pipe = rospy.Subscriber('/mediapipe/angle', PointStamped, self.callback_mediapipe_angle)
         self._sub_joint_velocity = rospy.Subscriber('/robot/joint_states',JointState, self.callback_joint_velocity)
-        self.rate = 200 # updaterate
+        self.rate = 100 # updaterate
         self._angle = 0
         self._joint_velocity = np.zeros((7,1))
         self.counter = 0 # sec
         self.ratio = 0.7 # 0.7 = 70% of max. Kd and Dd
-        self.timeout_stiff_joint = 2.0 # Time joint stays stiff bevor releasing stifness
+        self.timeout_stiff_joint = 1.0 # Time joint stays stiff bevor releasing stifness
         self.timeout = [0,0,0,0,0,0,0]
         self.velo_prev = [0,0,0,0,0,0,0]
         
@@ -72,7 +72,14 @@ class Stiffness_mangager():
 
             elif self.stiffness_calculation_method == "combined":
                 self.counter = 0
-                K_d, D_d = self.combine_stiffness(self.calculate_cv_stiffness(),self.calculate_velocity_stiffness())
+                Kd_velo, Dd_velo = self.calculate_velocity_stiffness()
+                Kd_cv, Dd_cv = self.calculate_cv_stiffness()
+                K_d = np.zeros(7)
+                D_d = np.zeros(7)
+                
+                for index, value in enumerate(Kd_velo):
+                    K_d[index]=max(value, Kd_cv[index])
+                    D_d[index]=max(Dd_velo[index],Dd_cv[index])
             else:
                 rospy.logerr_once("[Stiffness manager]: Wrong calculation method choosen (methods: pose/ velocity)")
                 self.counter = 0
@@ -167,14 +174,7 @@ class Stiffness_mangager():
         self.counter += 1
         return Kd, Dd
 
-    def combine_stiffness(self, Kd_cv, Dd_cv, Kd_velocity, Dd_velocity):
-        Kd = max(Kd_cv, Kd_velocity)
-        Dd = max(Dd_cv, Dd_velocity)
-
-        if Kd > self.K_d_upper_limit:
-            Kd = self.K_d_upper_limit
-            Dd= self.D_d_upper_limit
-        return Kd, Dd
+   
 
 if __name__ == "__main__":
     mng = Stiffness_mangager()

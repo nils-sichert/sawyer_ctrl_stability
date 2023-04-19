@@ -166,6 +166,9 @@ catkin_install_python(PROGRAMS
   scripts/stiffness_manager.py
   scripts/trajectory_executor.py
   scripts/camera_pose_detection.py
+  scripts/experiment_headDisplay_trialSession.py
+  scripts/experiment_headDisplay.py
+  scripts/experiment_headLight.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
  )
 

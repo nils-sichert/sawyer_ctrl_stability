@@ -36,7 +36,7 @@ TODO Safety regulator: implement behavior when getting close to joint angle limi
 """
 
 class controller():
-    def __init__(self, limb = "right"):
+    def __init__(self, limb = "right", node_name='Control_manager'):
         """
         Control class, handling the controlloop and a statemachine which is switching the control laws. 
         Parameter: limb configuration (Str)
@@ -44,7 +44,7 @@ class controller():
         """
         
         # Initalizing Rosnode
-        rospy.init_node('Control_manager', anonymous=True)
+        rospy.init_node(node_name, anonymous=True)
         rospy.loginfo("[Control node]: Initializing node...")
 
         # Control rate

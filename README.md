@@ -26,6 +26,7 @@ Install necessary packages:
   pip install scipy
   sudo apt-get install python3-matplotlib
   sudo apt-get ros-noetic-tf-transformations
+  pip install mediapipe
 ```
     
 ## Documentation
